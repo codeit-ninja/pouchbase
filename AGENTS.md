@@ -1,7 +1,7 @@
 ## Project Configuration
 
 - **Language**: TypeScript
-- **Package Manager**: pnpm (Turborepo-monorepo)
+- **Package Manager**: pnpm
 - **Add-ons**: prettier, eslint, sveltekit-adapter, ai-tools
 
 ---

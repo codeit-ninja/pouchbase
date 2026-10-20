@@ -1,15 +1,6 @@
-# PocketBase alternative (Cloudflare)
+# Pouchbase
 
-Turborepo-monorepo met pnpm workspaces.
-
-```
-apps/
-  web/          SvelteKit 3 + Svelte 5, bits-ui, runed, PocketBase JS SDK (adapter-cloudflare)
-  pocketbase/   lokale PocketBase-backend (SaaS-backend)
-packages/       ruimte voor npm-packages (CLI, JS client SDK, …)
-.claude/        Svelte-skills en -agent voor Claude Code
-.mcp.json       officiële Svelte MCP-server (https://mcp.svelte.dev/mcp)
-```
+SvelteKit 3-app (Svelte 5, TypeScript) met bits-ui en runed, gedeployed op Cloudflare Workers via `@sveltejs/adapter-cloudflare`.
 
 ## Starten
 
@@ -17,16 +8,12 @@ Vereist Node 22+ en pnpm 10 (`corepack enable`).
 
 ```bash
 pnpm install
-pnpm dev          # web (http://localhost:5173) + PocketBase (http://127.0.0.1:8090) tegelijk
-pnpm web:dev      # alleen de website
-pnpm pb:dev       # alleen PocketBase (binary wordt bij de eerste start gedownload)
+pnpm dev          # http://localhost:5173
 ```
 
-Overige taken via Turborepo: `pnpm build`, `pnpm check`, `pnpm lint`, `pnpm format`.
+Overige scripts: `pnpm build`, `pnpm preview` (via wrangler), `pnpm check`, `pnpm lint`, `pnpm format`, `pnpm gen` (Cloudflare-types bijwerken na wijzigingen in `wrangler.jsonc`).
 
-De web-app leest `POCKETBASE_URL` (zie `apps/web/src/env.ts`, standaard `http://127.0.0.1:8090`).
+## Claude Code
 
-## Nieuwe package toevoegen
-
-Maak `packages/<naam>/package.json` aan (bijv. `"name": "@repo/sdk"`) met een `build`-script.
-Gebruik hem in een app via `"@repo/sdk": "workspace:*"` en `pnpm install`.
+- `.mcp.json`: officiële Svelte MCP-server (https://mcp.svelte.dev/mcp)
+- `.claude/`: Svelte-skills en de `svelte-file-editor`-agent
