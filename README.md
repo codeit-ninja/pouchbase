@@ -1,86 +1,77 @@
-<div align="center">
+<p align="center">
   <a href="https://pouchbase.io">
-    <img src="src/lib/assets/logo.svg" alt="Pouchbase logo" width="120" height="120" />
+    <img src="src/lib/assets/logo.svg" alt="Pouchbase" width="96" height="96" />
   </a>
+</p>
 
-  <h1>Pouchbase</h1>
+<h1 align="center">Pouchbase</h1>
 
-  <p><strong>A PocketBase-style backend that lives entirely on Cloudflare.</strong><br />
-  Collections, records and auth, running on Workers and D1. No servers to babysit.</p>
+<p align="center">
+  An open-source backend for Cloudflare Workers and D1, inspired by PocketBase.
+</p>
 
-  <p>
-    <a href="https://pouchbase.io"><strong>pouchbase.io</strong></a>
-    ·
-    <a href="#-self-hosting">Self-hosting</a>
-    ·
-    <a href="#public-api">API</a>
-  </p>
+<p align="center">
+  <a href="https://pouchbase.io">Website</a> ·
+  <a href="#self-hosting">Self-hosting</a> ·
+  <a href="#public-api">API</a>
+</p>
 
-  <p>
-    <img alt="Status: work in progress" src="https://img.shields.io/badge/status-work%20in%20progress-F6821F" />
-    <img alt="Runs on Cloudflare Workers" src="https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-FBAD41?logo=cloudflare&logoColor=white" />
-    <img alt="Built with SvelteKit" src="https://img.shields.io/badge/built%20with-SvelteKit-FF3E00?logo=svelte&logoColor=white" />
-  </p>
-</div>
+> [!NOTE]
+> Pouchbase is under active development and not yet ready for production use. APIs, the database schema and the admin interface may change without notice, and no upgrade path between versions is guaranteed yet.
 
-> [!WARNING]
-> **Pouchbase is a work in progress.** Things will change and break between commits, and there is no stable release or migration path yet. Feel free to try it out, but don't trust it with production data just yet.
+## Features
 
-## ✨ What you get
+- Collections, fields and indexes, managed from the admin interface. A records API is planned.
+- Built-in user management with username and password sign-in and OAuth (Google, GitHub, Microsoft, Discord and Twitch).
+- A setup wizard that provisions the D1 databases and the first admin account.
+- Runs entirely on Cloudflare Workers, with D1 as the database.
+- Database migrations are applied automatically after each deploy.
 
-- 🗂️ **Collections & records** – define collections, fields and indexes and manage records in the admin UI. A records API for your app is on the way.
-- 🔐 **Auth built in** – username & password and OAuth (Google, GitHub, Microsoft, Discord, Twitch) for the users of your app.
-- 🧙 **One-minute install** – a setup wizard creates the D1 databases and your admin account for you.
-- ☁️ **Serverless by design** – runs on Cloudflare Workers with D1 as storage, so it scales down to zero and up to a lot.
-- 🔄 **Automatic migrations** – schema updates are applied on the first request after a deploy.
+## Self-hosting
 
-## 🚀 Self-hosting
+Requirements: a Cloudflare account, Node 22 or later and pnpm 10 (`corepack enable`).
 
-All you need is a Cloudflare account (the free plan is fine to start), Node 22+ and pnpm 10 (`corepack enable`).
+1. Clone the repository and install the dependencies:
 
-**1. Get the code**
+   ```bash
+   git clone https://github.com/pouchbase/pouchbase.git
+   cd pouchbase
+   pnpm install
+   ```
 
-```bash
-git clone https://github.com/pouchbase/pouchbase.git
-cd pouchbase
-pnpm install
-```
+2. Copy `.env.example` to `.env` and set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. The API token needs the following account-level permissions: Workers Scripts, D1, Workers R2 Storage and Workers KV Storage (Edit), and Account Settings (Read). Use `pnpm cf:whoami` to verify the account.
 
-**2. Add your Cloudflare credentials**
+3. Build and deploy the Worker, then store the credentials as Worker secrets:
 
-```bash
-cp .env.example .env
-```
+   ```bash
+   pnpm build
+   pnpm wrangler deploy
+   pnpm wrangler secret put CLOUDFLARE_ACCOUNT_ID
+   pnpm wrangler secret put CLOUDFLARE_API_TOKEN
+   ```
 
-Fill in `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. The token needs these account-level permissions: Workers Scripts, D1, Workers R2 Storage and Workers KV Storage set to **Edit**, Account Settings set to **Read**. Run `pnpm cf:whoami` to check which account you're on.
+4. Open the Worker URL. On first launch you are redirected to `/install`, which creates the databases and the admin account.
 
-**3. Deploy to Workers**
-
-```bash
-pnpm build
-pnpm wrangler deploy
-pnpm wrangler secret put CLOUDFLARE_ACCOUNT_ID
-pnpm wrangler secret put CLOUDFLARE_API_TOKEN
-```
-
-**4. Run the installer**
-
-Open your Worker's URL (for example `https://pouchbase.<your-subdomain>.workers.dev`). You'll be sent to `/install`, which creates the databases and your admin account. That's it! 🎉
-
-## 🛠️ Development
+## Development
 
 ```bash
 pnpm install
 pnpm dev          # http://localhost:5173
 ```
 
-Other scripts: `pnpm build`, `pnpm preview` (via wrangler), `pnpm check`, `pnpm lint`, `pnpm format`, `pnpm gen` (regenerate Cloudflare types after changing `wrangler.jsonc`), `pnpm db:generate` (generate Drizzle migrations).
+| Script             | Description                                                    |
+| ------------------ | -------------------------------------------------------------- |
+| `pnpm build`       | Production build                                               |
+| `pnpm preview`     | Run the production build locally with Wrangler                 |
+| `pnpm check`       | Type-check the project                                         |
+| `pnpm lint`        | Run Prettier and ESLint                                        |
+| `pnpm format`      | Format the code with Prettier                                  |
+| `pnpm gen`         | Regenerate Cloudflare types after changing `wrangler.jsonc`    |
+| `pnpm db:generate` | Generate Drizzle migrations after changing the database schema |
 
-Built with SvelteKit 3 (Svelte 5, TypeScript), bits-ui and runed, deployed through `@sveltejs/adapter-cloudflare`.
+Pouchbase is built with SvelteKit (Svelte 5, TypeScript), bits-ui and Drizzle ORM, and deployed with `@sveltejs/adapter-cloudflare`.
 
-## 📚 Reference
-
-### How installation works
+## How installation works
 
 On first launch the app redirects to `/install`, a two-step wizard:
 
@@ -89,16 +80,11 @@ On first launch the app redirects to `/install`, a two-step wizard:
    - the **app database**, with a random name like `pb-k3x9q0w2m7a1`. It holds the data of the app you build on Pouchbase, like PocketBase's data store. Its id and name are stored in the system database's `settings` (`app_database_id`, `app_database_name`).
 2. **App settings**: choose the app name. This completes the installation.
 
-The app uses **no D1 binding**. All queries go through the D1 HTTP API using `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (see `src/env.ts` and `src/lib/server/cloudflare/d1.ts`). In production, set them as Worker secrets:
-
-```bash
-pnpm wrangler secret put CLOUDFLARE_ACCOUNT_ID
-pnpm wrangler secret put CLOUDFLARE_API_TOKEN
-```
+The app uses **no D1 binding**. All queries go through the D1 HTTP API using `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (see `src/env.ts` and `src/lib/server/cloudflare/d1.ts`). In production they are stored as Worker secrets (see [Self-hosting](#self-hosting)).
 
 The schema lives in `src/lib/server/db/schema.ts` (Drizzle). After changing it, run `pnpm db:generate`. New migrations are applied during installation, and on existing installations automatically on the first request after a deploy.
 
-### App users & authentication
+## App users & authentication
 
 Every installation has a built-in `users` collection for the users of **your app** (separate from the Pouchbase admin account). It has the auth fields `email` and `username` (both unique), `name`, `avatar_url` and `verified`, which can't be renamed or deleted; you can add your own fields. Password hashes are stored in an internal table, never in `users`.
 
@@ -107,7 +93,7 @@ On the **Authentication** page (sidebar → System) you activate the sign-in met
 - **Username & password**, optionally with self sign-up. Set a user's password in the `users` collection.
 - **OAuth**: Google, GitHub, Microsoft, Discord and Twitch. Create an OAuth app at the provider, register the **callback URL** shown in the setup dialog, then enter the client ID and secret.
 
-#### Public API
+### Public API
 
 Every sign-in returns `{ token, user_id }`. Send the token as `Authorization: Bearer <token>`; it is a JWT (HS256), valid for 7 days. Like PocketBase, the API can be called from any origin.
 
@@ -120,7 +106,7 @@ Every sign-in returns `{ token, user_id }`. Send the token as `Authorization: Be
 | `POST /api/auth/oauth2/result`                        | `{ state, verifier }`: `202` while pending, then the result once             |
 | `GET /api/auth/me`                                    | The signed-in user, or `401`                                                 |
 
-#### OAuth from your app
+### OAuth from your app
 
 The token is never put in a URL: the app proves it started the sign-in with a secret PKCE verifier (same model as PocketBase). Open the popup synchronously in the click handler, otherwise browsers block it:
 
@@ -165,14 +151,3 @@ async function signInWith(provider) {
 ```
 
 A sign-in is linked to an existing user with the same email only when the provider verified that email (Google, GitHub's verified emails and Discord do; Microsoft and Twitch don't), so nobody can take over an account by claiming its address.
-
-### AI tooling
-
-- `.mcp.json`: official Svelte MCP server (https://mcp.svelte.dev/mcp)
-- `.claude/`: Svelte skills, the `svelte-file-editor` agent and the `pouchbase-components` skill with the project's component rules
-
----
-
-<div align="center">
-  <sub>Made with 🧡 by the Pouchbase team · <a href="https://pouchbase.io">pouchbase.io</a></sub>
-</div>
