@@ -151,3 +151,7 @@ async function signInWith(provider) {
 ```
 
 A sign-in is linked to an existing user with the same email only when the provider verified that email (Google, GitHub's verified emails and Discord do; Microsoft and Twitch don't), so nobody can take over an account by claiming its address.
+
+## License
+
+Pouchbase is licensed under the [GNU Affero General Public License v3.0](LICENSE). Apps that only talk to Pouchbase through its API are not affected by this license; modified versions of Pouchbase that are offered as a network service must make their source code available under the same license.
