@@ -1,0 +1,41 @@
+{
+	"version": "7",
+	"dialect": "sqlite",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "6",
+			"when": 1792540691641,
+			"tag": "0000_married_midnight",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "6",
+			"when": 1792542920157,
+			"tag": "0001_nervous_squirrel_girl",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "6",
+			"when": 1792544444648,
+			"tag": "0002_light_falcon",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "6",
+			"when": 1792546232316,
+			"tag": "0003_nice_zarek",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "6",
+			"when": 1792577859023,
+			"tag": "0004_flimsy_gauntlet",
+			"breakpoints": true
+		}
+	]
+}

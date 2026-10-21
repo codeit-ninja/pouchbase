@@ -34,8 +34,14 @@ export default defineConfig(
 		}
 	},
 	{
-		// Override or add rule settings here, such as:
-		// 'svelte/button-has-type': 'error'
-		rules: {}
+		rules: {
+			// Always use braces for if/else, and keep a blank line around if statements.
+			curly: ['error', 'all'],
+			'padding-line-between-statements': [
+				'error',
+				{ blankLine: 'always', prev: '*', next: 'if' },
+				{ blankLine: 'always', prev: 'if', next: '*' }
+			]
+		}
 	}
 );

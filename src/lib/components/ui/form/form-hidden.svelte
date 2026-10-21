@@ -1,0 +1,13 @@
+<script lang="ts">
+	import type { AnyRemoteFormField } from './form-context';
+
+	type Props = {
+		/** Field of a remote form, e.g. `myForm.fields.id`. */
+		field: AnyRemoteFormField;
+		value: string;
+	};
+
+	let { field, value }: Props = $props();
+</script>
+
+<input {...field.as('hidden', value)} />

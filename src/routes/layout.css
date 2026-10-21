@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+
+@theme {
+	/* Shared height for all form controls (buttons, inputs, selects, ...) so they line up. */
+	--spacing-control: --spacing(10);
+	/* Shared height for the sidebar header and the top header, so their borders line up. */
+	--spacing-header: --spacing(14);
+}
+
+@layer base {
+	/* Tailwind v4 no longer sets a pointer cursor on buttons; every clickable element gets one. */
+	button,
+	[role='button'],
+	a[href],
+	label[for],
+	select,
+	summary,
+	input[type='checkbox'],
+	input[type='radio'],
+	input[type='file'],
+	input[type='submit'],
+	input[type='reset'],
+	input[type='button'] {
+		cursor: pointer;
+	}
+
+	:disabled,
+	[aria-disabled='true'] {
+		cursor: not-allowed;
+	}
+}
