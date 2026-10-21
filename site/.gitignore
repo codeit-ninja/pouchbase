@@ -21,3 +21,7 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Claude Code
+CLAUDE.local.md
+.claude/settings.local.json
