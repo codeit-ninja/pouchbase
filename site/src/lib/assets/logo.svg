@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+	<defs>
+		<linearGradient id="pouchbase-logo-fill" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+			<stop stop-color="#FBAD41" />
+			<stop offset="1" stop-color="#F6821F" />
+		</linearGradient>
+		<mask id="pouchbase-logo-slabs">
+			<rect width="64" height="64" fill="#fff" />
+			<rect y="22" width="64" height="4" fill="#000" />
+			<rect y="38" width="64" height="4" fill="#000" />
+			<rect x="26" y="14" width="10" height="4" rx="2" fill="#000" />
+		</mask>
+	</defs>
+	<path
+		d="M12 14a6 6 0 0 1 6-6h16a17 17 0 0 1 0 34h-6v10a6 6 0 0 1-6 6h-4a6 6 0 0 1-6-6z"
+		fill="url(#pouchbase-logo-fill)"
+		mask="url(#pouchbase-logo-slabs)"
+	/>
+</svg>
