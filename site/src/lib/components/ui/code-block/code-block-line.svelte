@@ -1,8 +1,11 @@
 <script module lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
 
-	/** `command` gets a prompt, `output` is plain, `comment` is muted. */
-	export type Kind = 'command' | 'output' | 'comment';
+	/**
+	 * `command` gets a prompt, `continued` is an indented follow-up line of a command split with `\`,
+	 * `output` is plain, `comment` is muted.
+	 */
+	export type Kind = 'command' | 'continued' | 'output' | 'comment';
 
 	export type Props = HTMLAttributes<HTMLSpanElement> & {
 		kind?: Kind;
@@ -14,6 +17,7 @@
 
 	const kinds = {
 		command: 'text-zinc-100',
+		continued: 'pl-6 text-zinc-100',
 		output: 'text-zinc-400',
 		comment: 'text-zinc-500'
 	};

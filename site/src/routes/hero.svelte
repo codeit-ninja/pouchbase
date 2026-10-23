@@ -18,8 +18,8 @@
 			</h1>
 
 			<p class="text-lg leading-relaxed text-zinc-600 sm:text-xl">
-				Collections, users, OAuth sign-in and file storage, running on Workers, D1 and R2. Inspired
-				by PocketBase, deployed to your own Cloudflare account.
+				Collections, users, OAuth sign-in and file storage, running on Workers, D1 and R2,
+				deployed to your own Cloudflare account.
 			</p>
 
 			<div class="flex flex-wrap items-center gap-3">

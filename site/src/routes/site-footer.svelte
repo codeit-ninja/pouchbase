@@ -7,7 +7,7 @@
 
 	const links = [
 		{ label: 'GitHub', href: GITHUB_URL },
-		{ label: 'Documentation', href: `${GITHUB_URL}#readme` },
+		{ label: 'Documentation', href: resolve('/docs') },
 		{ label: 'Issues', href: `${GITHUB_URL}/issues` },
 		{ label: 'License', href: `${GITHUB_URL}/blob/main/LICENSE` }
 	];
@@ -26,13 +26,13 @@
 				Pouchbase
 			</a>
 			<p class="max-w-xs text-sm text-zinc-500">
-				An open-source backend for Cloudflare Workers, D1 and R2. Inspired by PocketBase.
+				An open-source backend for Cloudflare Workers, D1 and R2.
 			</p>
 		</div>
 
 		<nav aria-label="Footer" class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
 			{#each links as link (link.href)}
-				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external links only -->
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external links or built with resolve() -->
 				<a href={link.href} class="text-zinc-600 hover:text-zinc-950">{link.label}</a>
 			{/each}
 		</nav>
@@ -40,7 +40,7 @@
 
 	<div class="border-t border-zinc-200">
 		<p class="mx-auto max-w-6xl px-6 py-5 text-xs text-zinc-500">
-			© {year} Pouchbase. Not affiliated with Cloudflare or PocketBase.
+			© {year} Pouchbase. Not affiliated with Cloudflare.
 		</p>
 	</div>
 </footer>

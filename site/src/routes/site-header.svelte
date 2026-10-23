@@ -58,7 +58,7 @@
 				</Button.Root>
 			</span>
 
-			<Button.Root variant="brand" href="{resolve('/')}#self-hosting">Get started</Button.Root>
+			<Button.Root variant="brand" href={resolve('/docs/getting-started')}>Get started</Button.Root>
 
 			<Button.Root
 				variant="ghost"
@@ -101,7 +101,7 @@
 						{/each}
 					</nav>
 				{:else}
-					<!-- eslint-disable svelte/no-navigation-without-resolve -- external link from site-nav.ts -->
+					<!-- eslint-disable svelte/no-navigation-without-resolve -- hrefs are built with resolve() in site-nav.ts -->
 					<a
 						href={entry.href}
 						onclick={() => (menuOpen = false)}
@@ -117,7 +117,7 @@
 		<Sheet.Footer class="justify-start">
 			<Button.Root
 				variant="brand"
-				href="{resolve('/')}#self-hosting"
+				href={resolve('/docs/getting-started')}
 				onclick={() => (menuOpen = false)}
 			>
 				Get started

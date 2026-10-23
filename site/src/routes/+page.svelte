@@ -8,7 +8,7 @@
 	<title>Pouchbase · The open-source backend for Cloudflare Workers</title>
 	<meta
 		name="description"
-		content="Pouchbase is an open-source backend for Cloudflare Workers, D1 and R2, inspired by PocketBase. Collections, users, OAuth sign-in and file storage on your own Cloudflare account."
+		content="Pouchbase is an open-source backend for Cloudflare Workers, D1 and R2. Collections, users, OAuth sign-in and file storage on your own Cloudflare account."
 	/>
 </svelte:head>
 

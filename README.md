@@ -7,7 +7,7 @@
 <h1 align="center">Pouchbase</h1>
 
 <p align="center">
-  An open-source backend on Cloudflare D1 and R2, inspired by PocketBase. Runs as a Cloudflare Worker, or on your own server with Docker or as a single binary.
+  An open-source backend on Cloudflare D1 and R2. Runs as a Cloudflare Worker, or on your own server with Docker or as a single binary.
 </p>
 
 <p align="center">
@@ -101,7 +101,7 @@ The image answers a health check at `/api/health`. The same build runs without D
 
 ### Single binary
 
-Like PocketBase, Pouchbase also comes as one executable without dependencies: every release attaches `pouchbase-linux-x64`, `pouchbase-linux-arm64`, `pouchbase-macos-arm64` and `pouchbase-windows-x64.exe`. Each one contains Node 26, the app and its static files. The data still lives on Cloudflare, so the binary keeps no files of its own.
+Pouchbase also comes as one executable without dependencies: every release attaches `pouchbase-linux-x64`, `pouchbase-linux-arm64`, `pouchbase-macos-arm64` and `pouchbase-windows-x64.exe`. Each one contains Node 26, the app and its static files. The data still lives on Cloudflare, so the binary keeps no files of its own.
 
 ```bash
 chmod +x pouchbase-linux-x64
@@ -116,13 +116,16 @@ To build a binary for your own platform, run `pnpm build:binary` with Node 26; i
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:5173
+pnpm dev          # app on http://localhost:5173, site on http://localhost:5174
 ```
 
 The dev server uses the Cloudflare credentials from `.env`: development also runs against D1 and R2.
 
 | Script              | Description                                                    |
 | ------------------- | -------------------------------------------------------------- |
+| `pnpm dev`          | Start the app and the site dev servers                         |
+| `pnpm dev:app`      | Start only the app dev server                                  |
+| `pnpm dev:site`     | Start only the site dev server                                 |
 | `pnpm build`        | Production build for Cloudflare Workers                        |
 | `pnpm build:node`   | Production build for Node (what the Docker image runs)         |
 | `pnpm build:binary` | Single binary for the current platform in `dist/` (Node 26)    |
@@ -142,7 +145,7 @@ On first launch the app redirects to `/install`, a two-step wizard:
 
 1. **Account**: creates two D1 databases through the Cloudflare API and then the admin account. You are logged in right away.
    - `pouchbase`, the **system database** (users, sessions, settings). Its migrations come from `./drizzle`.
-   - the **app database**, with a random name like `pb-k3x9q0w2m7a1`. It holds the data of the app you build on Pouchbase, like PocketBase's data store. Its id and name are stored in the system database's `settings` (`app_database_id`, `app_database_name`).
+   - the **app database**, with a random name like `pb-k3x9q0w2m7a1`. It holds the data of the app you build on Pouchbase. Its id and name are stored in the system database's `settings` (`app_database_id`, `app_database_name`).
 2. **App settings**: choose the app name. This completes the installation.
 
 The databases are created during installation, so `wrangler.jsonc` has **no D1 binding**. Queries go through the D1 HTTP API using `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (see `src/env.ts` and `src/lib/server/platform/cloudflare/`), which is what lets the same app run on a Worker and on your own server. On Workers they are stored as secrets (see [Self-hosting](#self-hosting)).
@@ -171,7 +174,7 @@ With mail set up, a sign-up with an email address sends a verification email. Th
 
 ### Public API
 
-Every sign-in returns `{ token, user_id }`. Send the token as `Authorization: Bearer <token>`; it is a JWT (HS256), valid for 7 days. Like PocketBase, the API can be called from any origin.
+Every sign-in returns `{ token, user_id }`. Send the token as `Authorization: Bearer <token>`; it is a JWT (HS256), valid for 7 days. The API can be called from any origin.
 
 | Request                                               | Purpose                                                                       |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -210,7 +213,7 @@ Records are returned as stored (as in the generated types); blob fields are left
 
 ### OAuth from your app
 
-The token is never put in a URL: the app proves it started the sign-in with a secret PKCE verifier (same model as PocketBase). Open the popup synchronously in the click handler, otherwise browsers block it:
+The token is never put in a URL: the app proves it started the sign-in with a secret PKCE verifier. Open the popup synchronously in the click handler, otherwise browsers block it:
 
 ```js
 const POUCHBASE = 'https://your-pouchbase.example.com';
@@ -264,7 +267,7 @@ In the admin, `files` can be shown as a table or as a grid with large previews. 
 
 ### Thumbnails
 
-Under **Settings** on the `files` collection you can turn on thumbnails and list sizes in PocketBase syntax:
+Under **Settings** on the `files` collection you can turn on thumbnails and list the sizes to generate:
 
 | Size   | Result                                |
 | ------ | ------------------------------------- |

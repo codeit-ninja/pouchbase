@@ -2,6 +2,7 @@
 	import * as Button from '#lib/components/ui/button/index.js';
 	import * as CodeBlock from '#lib/components/ui/code-block/index.js';
 	import * as Icon from '#lib/components/ui/icon/index.js';
+	import { resolve } from '$app/paths';
 	import { GITHUB_URL } from './site-nav';
 
 	const steps = [
@@ -37,7 +38,7 @@
 				</h2>
 				<p class="text-lg text-zinc-600">
 					Pouchbase is a single Worker. Deploy it once and manage everything from the admin
-					interface.
+					interface. Prefer your own server? It also runs with Docker or as a single binary.
 				</p>
 			</div>
 
@@ -58,9 +59,9 @@
 			</ol>
 
 			<div>
-				<Button.Root variant="secondary" href="{GITHUB_URL}#self-hosting">
+				<Button.Root variant="secondary" href={resolve('/docs/getting-started')}>
 					Read the full guide
-					<Icon.Root icon="lucide:arrow-up-right" />
+					<Icon.Root icon="lucide:arrow-right" />
 				</Button.Root>
 			</div>
 		</div>

@@ -86,7 +86,7 @@ jobs:
             latest=${{ github.event_name == 'release' && !github.event.release.prerelease || inputs.latest == true }}
           labels: |
             org.opencontainers.image.title=Pouchbase
-            org.opencontainers.image.description=Open-source backend on Cloudflare D1 and R2, inspired by PocketBase
+            org.opencontainers.image.description=Open-source backend on Cloudflare D1 and R2
             org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: Build and push

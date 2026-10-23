@@ -7,6 +7,8 @@ import { defineConfig } from 'vite';
 import { iconify } from './vite/iconify.ts';
 
 export default defineConfig({
+	// The app runs on 5173 during `pnpm dev` at the repository root.
+	server: { port: 5174 },
 	plugins: [
 		iconify({ sets: [lucide, simpleIcons] }),
 		tailwindcss(),

@@ -6,7 +6,9 @@
 	"type": "module",
 	"packageManager": "pnpm@12.15.0",
 	"scripts": {
-		"dev": "vite dev",
+		"dev": "pnpm run \"/^dev:/\"",
+		"dev:app": "vite dev",
+		"dev:site": "pnpm --filter pouchbase-site dev",
 		"build": "wrangler types --check && vite build && node scripts/worker-entry.mjs",
 		"build:node": "cross-env POUCHBASE_TARGET=node vite build",
 		"build:binary": "pnpm build:node && node scripts/build-binary.mjs",

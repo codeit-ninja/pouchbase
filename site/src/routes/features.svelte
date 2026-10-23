@@ -72,7 +72,7 @@
 				</span>
 				<h3 class="font-display text-xl font-semibold text-zinc-950">A public API</h3>
 				<p class="text-zinc-600">
-					Sign users in from any origin and get back a JWT, like PocketBase. OAuth uses a PKCE flow,
+					Sign users in from any origin and get back a JWT. OAuth uses a PKCE flow,
 					so the token never ends up in a URL.
 				</p>
 			</article>

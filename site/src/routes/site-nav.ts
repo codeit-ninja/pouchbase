@@ -50,10 +50,10 @@ export const navigation: (NavGroup | NavLink)[] = [
 		label: 'Resources',
 		links: [
 			{
-				label: 'Documentation',
-				href: `${GITHUB_URL}#readme`,
+				label: 'Getting started',
+				href: resolve('/docs/getting-started'),
 				icon: 'lucide:book-open',
-				description: 'Setup, configuration and the public API.'
+				description: 'Self-host on Workers, with Docker or as a binary.'
 			},
 			{
 				label: 'Releases',
@@ -69,7 +69,7 @@ export const navigation: (NavGroup | NavLink)[] = [
 			}
 		]
 	},
-	{ label: 'Docs', href: `${GITHUB_URL}#readme` }
+	{ label: 'Docs', href: resolve('/docs') }
 ];
 
 export function isGroup(entry: NavGroup | NavLink): entry is NavGroup {
