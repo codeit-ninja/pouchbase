@@ -14,6 +14,11 @@
 	"triggers": {
 		"crons": ["* * * * *"]
 	},
+	// Monaco only runs in the browser (code-monaco.ts), but its dynamic import stays in the server
+	// build. The Worker never loads it, and bundling its CSS and font fails (scripts/browser-only.js).
+	"alias": {
+		"monaco-editor": "./scripts/browser-only.js"
+	},
 	"workers_dev": true,
 	"preview_urls": true
 }
