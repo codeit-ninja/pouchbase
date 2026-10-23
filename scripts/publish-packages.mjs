@@ -1,5 +1,6 @@
-// Publishes the workspace packages in packages/ whose version isn't on npm yet (`pnpm release`, run by
-// the Release workflow after the Version Packages pull request is merged). Build them first.
+// Builds and publishes the workspace packages in packages/ whose version isn't on npm yet (`pnpm
+// release`, run by the Release workflow after the Version Packages pull request is merged). Packages
+// that are already published aren't built, so a push without a new version builds nothing.
 //
 // pnpm packs each package, which applies its `publishConfig` (the plugin SDK swaps its source exports
 // for dist), and npm publishes the tarball: npm does the trusted publishing (OIDC) exchange with
@@ -55,6 +56,7 @@ try {
 		try {
 			const packDir = path.join(outDir, entry.name);
 
+			execFileSync('pnpm', ['run', 'build'], { cwd: dir, stdio: 'inherit', shell });
 			execFileSync('pnpm', ['pack', '--pack-destination', packDir], {
 				cwd: dir,
 				stdio: 'pipe',

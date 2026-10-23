@@ -64,11 +64,11 @@ The plugin contract lives in the workspace package `packages/plugin-sdk` (`@pouc
 
 Versioning and the changelog are managed with [Changesets](https://changesets.dev) (`.changeset/`, see its README).
 
-- Every new feature, bug fix or breaking change gets a changeset: run `pnpm changeset` or add a Markdown file to `.changeset/` by hand, with frontmatter `'pouchbase': patch | minor | major` (or `'@pouchbasejs/js-sdk'` / `'@pouchbasejs/plugin-sdk'` for the packages) and a one-line, user-facing description in English.
+- Every new feature, bug fix or breaking change gets a changeset: run `pnpm changeset` or add a Markdown file to `.changeset/` by hand, with frontmatter `'pouchbase': patch | minor | major` (or `'@pouchbasejs/js-sdk'` / `'@pouchbasejs/plugin-sdk'` / `'pouchbase-site'` for the packages and the site) and a one-line, user-facing description in English.
 - Create the changeset in the same change as the code, as part of the work, not afterwards.
 - Do **not** create a separate changeset when the change belongs to work that already has an unreleased changeset in `.changeset/` (e.g. fixing a bug in a feature that is still pending): update that changeset's description if it no longer covers the change.
 - Bump types: `patch` for bug fixes and small improvements, `minor` for new features, `major` for breaking changes. Internal refactors, docs and tooling changes need no changeset.
-- Never run `pnpm changeset:version` unless asked; the Release workflow does it in the Version Packages pull request, and merging that pull request releases the version: the app as a `v<version>` GitHub release, the SDKs on npm. The site is never versioned (Changesets ignores it).
+- Never run `pnpm changeset:version` unless asked; the Release workflow does it in the Version Packages pull request, and merging that pull request releases the version: the app as a `v<version>` GitHub release and a deploy to Cloudflare, the SDKs on npm and the site as a deploy to Cloudflare (tag `site-v<version>`). A push without a version bump builds and deploys nothing, so a site change only goes live with a changeset for `pouchbase-site`.
 
 ---
 

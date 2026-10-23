@@ -7,8 +7,14 @@
 #      see scripts/publish-packages.mjs). They get no git tag or GitHub release, so the repository's
 #      releases stay those of the app.
 #    - when the app's version has no tag yet, it creates the tag and a GitHub release with the
-#      changelog entry as notes, then builds and pushes the Docker image (docker.yml) and attaches
-#      the single binaries (binaries.yml).
+#      changelog entry as notes, then deploys the app to Cloudflare Workers, builds and pushes the
+#      Docker image (docker.yml) and attaches the single binaries (binaries.yml).
+#    - when the site's version has no `site-v<version>` tag yet, it deploys pouchbase.io to
+#      Cloudflare Workers and creates that tag.
+#
+# Nothing is built or deployed for a push that doesn't bump a version. Workers Builds is not used:
+# the deploys need the CLOUDFLARE_API_TOKEN secret (Workers Scripts: Edit) and the
+# CLOUDFLARE_ACCOUNT_ID variable.
 #
 # Publishing to npm uses trusted publishing (OIDC): every package has this repository and release.yml
 # as its trusted publisher on npmjs.com, so there is no npm token. A new package has to be published
@@ -40,6 +46,7 @@ jobs:
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       prerelease: ${{ steps.release.outputs.prerelease }}
+      site-tag: ${{ steps.site.outputs.tag }}
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -114,6 +121,101 @@ jobs:
 
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+
+      - name: Check for a new site version
+        id: site
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        run: |
+          version=$(node -p "require('./site/package.json').version")
+          tag="site-v${version}"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" > /dev/null; then
+            echo "${tag} is already deployed."
+            exit 0
+          fi
+
+          # Only versions bumped by Changesets are deployed, never the initial version.
+          if ! grep -qx "## ${version}" site/CHANGELOG.md 2>/dev/null; then
+            echo "site/CHANGELOG.md has no entry for ${version}; nothing to deploy."
+            exit 0
+          fi
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+  deploy-app:
+    name: Deploy the app
+    needs: release
+    if: needs.release.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter "pouchbase..."
+
+      - name: Build
+        run: pnpm build
+
+      - name: Deploy to Cloudflare Workers
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-site:
+    name: Deploy the site
+    needs: release
+    if: needs.release.outputs.site-tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter pouchbase-site
+
+      - name: Build
+        run: pnpm --filter pouchbase-site build
+
+      - name: Deploy to Cloudflare Workers
+        working-directory: site
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      # Tagged after the deploy, so a failed deploy is retried by re-running this job.
+      - name: Tag the deployed version
+        env:
+          TAG: ${{ needs.release.outputs.site-tag }}
+        run: |
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/${TAG}"
 
   docker:
     name: Docker image

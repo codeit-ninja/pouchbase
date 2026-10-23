@@ -23,7 +23,7 @@
 		"seed:test-users": "node scripts/seed-test-users.mjs",
 		"changeset": "changeset",
 		"changeset:version": "changeset version",
-		"release": "pnpm --filter \"./packages/*\" build && node scripts/publish-packages.mjs"
+		"release": "node scripts/publish-packages.mjs"
 	},
 	"devDependencies": {
 		"@changesets/changelog-github": "^1.0.1",
