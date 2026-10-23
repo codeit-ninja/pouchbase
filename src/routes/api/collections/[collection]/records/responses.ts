@@ -3,6 +3,17 @@ import type { ServiceError } from '#lib/server/services/base.service.js';
 import { API_RULE_LABELS } from '#lib/filter/rules.js';
 import { json } from '#lib/server/api.js';
 
+/** `?fields=id,title` as a list of names; `undefined` without it. */
+export function requestedFields(url: URL) {
+	const value = url.searchParams.get('fields');
+	const names = value
+		?.split(',')
+		.map((name) => name.trim())
+		.filter(Boolean);
+
+	return names?.length ? names : undefined;
+}
+
 /**
  * The response for a failed request to the records API. `fallback` is the message for unexpected
  * errors, such as `Could not list the records`.

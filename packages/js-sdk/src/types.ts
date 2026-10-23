@@ -25,8 +25,15 @@ export type User = Record<string, unknown> & { id: string };
  */
 export type DefaultCollections = { users: User };
 
-/** The record type of the `users` collection in `C`. */
-export type UserOf<C> = C extends { users: infer U extends { id: string } } ? U : User;
+/**
+ * The record type of the `users` collection in `C`: a `Schema` entry (`{ $record }`) or a record
+ * type.
+ */
+export type UserOf<C> = C extends { users: infer U }
+	? (U extends { $record: infer R } ? R : U) extends infer R extends { id: string }
+		? R
+		: User
+	: User;
 
 /** The result of a successful sign-in or sign-up. */
 export type AuthResult = {

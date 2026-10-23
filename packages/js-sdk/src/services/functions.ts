@@ -19,9 +19,9 @@ export type InvokeOptions = {
  * function knows who calls it; functions that require sign-in answer `401` without one.
  */
 export class FunctionsService {
-	readonly #pb: Pouchbase;
+	readonly #pb: Pouchbase<object>;
 
-	constructor(pb: Pouchbase) {
+	constructor(pb: Pouchbase<object>) {
 		this.#pb = pb;
 	}
 

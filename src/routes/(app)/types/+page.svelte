@@ -48,7 +48,7 @@
 				<Page.Title>Types</Page.Title>
 				<Page.Description>
 					TypeScript types of your collections, for the JavaScript SDK:
-					<span class="font-mono">new Pouchbase&lt;Collections&gt;(url)</span>.
+					<span class="font-mono">createClient&lt;Schema&gt;(url)</span>.
 				</Page.Description>
 			</div>
 		</Page.Header>

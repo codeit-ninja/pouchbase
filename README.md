@@ -209,7 +209,7 @@ Every collection has a records API at `/api/collections/<name>/records`, guarded
 
 Filters (`?filter=` and rules) use field names, `"strings"`, numbers, `true`/`false`, `null`, `@now`, `@request.auth.<field>` (the signed-in user; `""` when signed out) and `@request.body.<field>` (submitted values), with `=`, `!=`, `>`, `>=`, `<`, `<=`, `~` (contains), `!~`, the same with `?` in front for any item of a multiple relation or list (`tags ?= "news"`), `&&`, `||` and parentheses. `?sort=-created_at,title` sorts; `-` means descending.
 
-Records are returned as stored (as in the generated types); blob fields are left out. `users` can't be created through the API (use sign-up), and its `email` and `verified` can't be changed there; `files` can only be listed, viewed and deleted. The **Preview** tab of the same panel shows every endpoint with SDK and cURL examples for its fields.
+Records come back with real values: booleans as `true`/`false`, JSON fields parsed, and multiple relations, files and lists as arrays (`[]` when empty); blob fields are left out. `?fields=id,title` returns only those fields. `users` can't be created through the API (use sign-up), and its `email` and `verified` can't be changed there; `files` can only be listed, viewed and deleted. The **Preview** tab of the same panel shows every endpoint with SDK and cURL examples for its fields.
 
 ### OAuth from your app
 

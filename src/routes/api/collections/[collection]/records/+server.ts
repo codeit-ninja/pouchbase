@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { json, preflight, requestUser } from '#lib/server/api.js';
 import { readJsonObject } from '#lib/server/api-body.js';
 
-import { errorResponse } from './responses';
+import { errorResponse, requestedFields } from './responses';
 
 const MAX_PER_PAGE = 500;
 
@@ -20,9 +20,9 @@ function positiveInteger(value: string | null, fallback: number) {
 
 /**
  * Lists the records of a collection that its list rule allows.
- * Query: `page` (default 1), `perPage` (default 30, at most 500), `sort` (`-created_at,title`) and
- * `filter` (`status = "published" && views > 10`) → `{ page, perPage, totalItems, totalPages,
- * items }`.
+ * Query: `page` (default 1), `perPage` (default 30, at most 500), `sort` (`-created_at,title`),
+ * `filter` (`status = "published" && views > 10`) and `fields` (`id,title`) → `{ page, perPage,
+ * totalItems, totalPages, items }`.
  */
 export const GET: RequestHandler = async (event) => {
 	const { params, url, locals } = event;
@@ -48,7 +48,8 @@ export const GET: RequestHandler = async (event) => {
 			page,
 			perPage,
 			sort: url.searchParams.get('sort') ?? undefined,
-			filter: url.searchParams.get('filter') ?? undefined
+			filter: url.searchParams.get('filter') ?? undefined,
+			fields: requestedFields(url)
 		},
 		{ auth: caller.user }
 	);
@@ -62,10 +63,11 @@ export const GET: RequestHandler = async (event) => {
 
 /**
  * Creates a record when the collection's create rule allows it. Body: a JSON object with a value
- * per field → the new record. Fields that are left out get their default value.
+ * per field → the new record (only `?fields=` when given). Fields that are left out get their
+ * default value.
  */
 export const POST: RequestHandler = async (event) => {
-	const { params, request, locals } = event;
+	const { params, request, url, locals } = event;
 	const body = await readJsonObject(request);
 
 	if (!body) {
@@ -80,7 +82,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const result = await locals.services
 		.records()
-		.apiCreate(params.collection, body, { auth: caller.user });
+		.apiCreate(params.collection, body, { auth: caller.user }, requestedFields(url));
 
 	if (result.isErr()) {
 		return errorResponse(result.error, 'Could not create the record');

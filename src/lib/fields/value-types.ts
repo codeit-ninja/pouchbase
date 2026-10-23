@@ -3,9 +3,10 @@ import type { FieldOptions, FieldType } from './field-types';
 import { idGenerator } from './field-types';
 
 /**
- * The TypeScript type of a field's value as the records API returns it: the value stored in the
- * column, with a note for docs. `target` is the name of the collection a relation points to.
- * Used by the generated types and the API preview in the dashboard.
+ * The TypeScript type of a field's value as the records API returns it, with a note for docs:
+ * booleans are `boolean`, JSON fields are parsed (`JsonValue`, declared in the generated types),
+ * and multiple relations, files and lists are arrays. `target` is the name of the collection a
+ * relation points to. Used by the generated types and the API preview in the dashboard.
  */
 export function fieldValueType(
 	field: { type: FieldType; options: FieldOptions },
@@ -36,25 +37,24 @@ export function fieldValueType(
 		case 'integer':
 			return { type: 'number' };
 		case 'boolean':
-			return { type: '0 | 1', note: '1 for true, 0 for false.' };
+			return { type: 'boolean' };
 		case 'json':
-			return { type: 'string', note: 'JSON text; use `JSON.parse` to read it.' };
-		case 'list':
-			if (field.options.multiple) {
-				return { type: 'string', note: 'JSON array of the selected items.' };
-			}
+			return { type: 'JsonValue', note: 'Any JSON value.' };
+		case 'list': {
+			const item =
+				items.length > 0 ? items.map((value) => JSON.stringify(value)).join(' | ') : 'string';
 
-			return {
-				type: items.length > 0 ? items.map((item) => JSON.stringify(item)).join(' | ') : 'string',
-				note: 'The selected item.'
-			};
+			return field.options.multiple
+				? { type: items.length > 1 ? `(${item})[]` : `${item}[]`, note: 'The selected items.' }
+				: { type: item, note: 'The selected item.' };
+		}
 		case 'relation':
 			return field.options.multiple
-				? { type: 'string', note: `JSON array of ids of records in \`${target ?? '?'}\`.` }
+				? { type: 'string[]', note: `Ids of records in \`${target ?? '?'}\`.` }
 				: { type: 'string', note: `Id of a record in \`${target ?? '?'}\`.` };
 		case 'file':
 			return field.options.multiple
-				? { type: 'string', note: 'JSON array of ids of records in `files`.' }
+				? { type: 'string[]', note: 'Ids of records in `files`.' }
 				: { type: 'string', note: 'Id of a record in `files`.' };
 		case 'computed':
 			return { type: 'string', note: 'Calculated when the record is saved.' };

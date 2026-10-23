@@ -89,16 +89,21 @@ type RecordContext = { collection: Collection; fields: Field[]; databaseId: stri
  */
 export type ApiAccess = { auth: Record<string, unknown> | null };
 
-/** A record as the records API returns it: the stored value of every field except blobs. */
-export type ApiRecord = Record<string, string | number | null>;
+/**
+ * A record as the records API returns it: every field except blobs, with real values: booleans as
+ * `true`/`false`, JSON fields parsed, and multiple relations, files and lists as arrays.
+ */
+export type ApiRecord = Record<string, unknown>;
 
 export type ApiListOptions = {
 	page: number;
 	perPage: number;
-	/** PocketBase syntax: `-created_at,title`. */
+	/** Fields to sort on: `-created_at,title` (`-` for descending). */
 	sort?: string;
 	/** A filter expression, see `#lib/filter/filter.ts`. */
 	filter?: string;
+	/** Only return these fields; all of them when missing. */
+	fields?: string[];
 };
 
 export type ApiRecordList = {
@@ -116,7 +121,7 @@ type GuardError =
 	| InvalidRecordError;
 
 type InvalidQueryError = ServiceError<8015, 'INVALID_QUERY'> & {
-	data: { param: 'filter' | 'sort'; message: string };
+	data: { param: 'filter' | 'sort' | 'fields'; message: string };
 };
 
 type ContextError =
@@ -307,10 +312,55 @@ function apiFields(collectionFields: Field[]) {
 	return collectionFields.filter((field) => field.type !== 'blob');
 }
 
-/** A selected row of `apiFields` as an API record. */
-function toApiRecord(collectionFields: Field[], row: unknown[]) {
+/** Whether a field holds a JSON array of values. */
+function isMultiple(field: Field) {
+	return (
+		(field.type === 'relation' || field.type === 'file' || field.type === 'list') &&
+		!!field.options.multiple
+	);
+}
+
+/** A stored value as the records API returns it (see `ApiRecord`). */
+function decodeValue(field: Field, value: unknown): unknown {
+	if (value === null || value === undefined) {
+		return isMultiple(field) ? [] : null;
+	}
+
+	if (field.type === 'boolean') {
+		return Number(value) === 1;
+	}
+
+	if (field.type === 'json' || isMultiple(field)) {
+		try {
+			const parsed: unknown = JSON.parse(String(value));
+			return isMultiple(field) && !Array.isArray(parsed) ? [parsed] : parsed;
+		} catch {
+			return isMultiple(field) ? [String(value)] : value;
+		}
+	}
+
+	return value;
+}
+
+/** The fields the API returns: `names` (checked) or all readable ones. Throws a `FilterError`. */
+function selectFields(readable: Field[], names: string[] | undefined) {
+	if (!names?.length) {
+		return readable;
+	}
+
+	for (const name of names) {
+		if (!readable.some((field) => field.name === name)) {
+			throw new FilterError(`Unknown field \`${name}\``);
+		}
+	}
+
+	return readable.filter((field) => names.includes(field.name));
+}
+
+/** A row with the columns of `selected`, in order, as an API record. */
+function toApiRecord(selected: Field[], row: unknown[]) {
 	return Object.fromEntries(
-		apiFields(collectionFields).map((field, index) => [field.name, row[index] ?? null])
+		selected.map((field, index) => [field.name, decodeValue(field, row[index])])
 	) as ApiRecord;
 }
 
@@ -489,14 +539,19 @@ export class RecordsService extends Service {
 						? both(rule, compileFilter(options.filter, readable, access))
 						: rule
 				).andThen((where) =>
-					this.compileQuery('sort', () => compileSort(options.sort ?? '', readable)).andThen(
-						(sort) => {
+					this.compileQuery('sort', () => compileSort(options.sort ?? '', readable))
+						.andThen((sort) =>
+							this.compileQuery('fields', () => selectFields(readable, options.fields)).map(
+								(selected) => ({ sort, selected })
+							)
+						)
+						.andThen(({ sort, selected }) => {
 							// Without a sort, records come in the order they were created.
 							const order = [
 								...(sort.length ? sort : [`"${created[0] ?? key}" ASC`]),
 								`"${key}" ASC`
 							];
-							const columns = readable.map((field) => `"${field.name}"`).join(', ');
+							const columns = selected.map((field) => `"${field.name}"`).join(', ');
 
 							return fromPromise(
 								batchDatabase(databaseId, [
@@ -518,11 +573,10 @@ export class RecordsService extends Service {
 									perPage: options.perPage,
 									totalItems,
 									totalPages: Math.ceil(totalItems / options.perPage),
-									items: rows.map((row) => toApiRecord(collectionFields, row))
+									items: rows.map((row) => toApiRecord(selected, row))
 								} satisfies ApiRecordList;
 							});
-						}
-					)
+						})
 				);
 			})
 		);
@@ -530,18 +584,18 @@ export class RecordsService extends Service {
 
 	/**
 	 * One record for the records API; `null` when it doesn't exist or the collection's view rule
-	 * doesn't match it. Without `access`, the rule isn't checked.
+	 * doesn't match it. Without `access`, the rule isn't checked. `fields` limits the fields.
 	 */
 	apiGet(
 		collectionName: string,
 		id: string,
-		access?: ApiAccess
+		options: { access?: ApiAccess; fields?: string[] } = {}
 	): ResultAsync<
 		ApiRecord | null,
-		ContextError | GuardError | ServiceError<8011, 'GET_RECORD_FAILED'>
+		ContextError | GuardError | InvalidQueryError | ServiceError<8011, 'GET_RECORD_FAILED'>
 	> {
 		return this.context(collectionName).andThen((context) =>
-			this.guard(context, 'view', access).andThen((rule) => {
+			this.guard(context, 'view', options.access).andThen((rule) => {
 				const { collection, fields: collectionFields, databaseId } = context;
 				const { key } = autoFields(collectionFields);
 
@@ -549,25 +603,28 @@ export class RecordsService extends Service {
 					return okAsync(null);
 				}
 
-				const columns = apiFields(collectionFields).map((field) => `"${field.name}"`);
-
-				return fromPromise(
-					queryDatabase(
-						databaseId,
-						`SELECT ${columns.join(', ')} FROM "${collection.name}" WHERE "${key}" = ? AND (${rule.sql})`,
-						[...keyParams(key, [id]), ...rule.params]
-					),
-					(error) => this.error(8011, 'GET_RECORD_FAILED', error)
-				).map(([row]) => (row ? toApiRecord(collectionFields, row) : null));
+				return this.compileQuery('fields', () =>
+					selectFields(apiFields(collectionFields), options.fields)
+				).andThen((selected) =>
+					fromPromise(
+						queryDatabase(
+							databaseId,
+							`SELECT ${selected.map((field) => `"${field.name}"`).join(', ')} FROM "${collection.name}" WHERE "${key}" = ? AND (${rule.sql})`,
+							[...keyParams(key, [id]), ...rule.params]
+						),
+						(error) => this.error(8011, 'GET_RECORD_FAILED', error)
+					).map(([row]) => (row ? toApiRecord(selected, row) : null))
+				);
 			})
 		);
 	}
 
-	/** Creates a record through the records API (see `create`) and returns it. */
+	/** Creates a record through the records API (see `create`) and returns it (its `fields`). */
 	apiCreate(
 		collectionName: string,
 		input: RecordInput,
-		access: ApiAccess
+		access: ApiAccess,
+		fields?: string[]
 	): ResultAsync<
 		ApiRecord,
 		| ErrorOf<ReturnType<RecordsService['create']>>
@@ -575,25 +632,26 @@ export class RecordsService extends Service {
 		| ServiceError<8003, 'RECORD_NOT_FOUND'>
 	> {
 		return this.create(collectionName, input, { access }).andThen(({ id }) =>
-			this.found(collectionName, id)
+			this.found(collectionName, id, fields)
 		);
 	}
 
 	/**
 	 * Updates the fields in `input` of a record through the records API (see `update`) and returns
-	 * the record.
+	 * the record (its `fields`).
 	 */
 	apiUpdate(
 		collectionName: string,
 		id: string,
 		input: RecordInput,
-		access: ApiAccess
+		access: ApiAccess,
+		fields?: string[]
 	): ResultAsync<
 		ApiRecord,
 		ErrorOf<ReturnType<RecordsService['update']>> | ErrorOf<ReturnType<RecordsService['apiGet']>>
 	> {
 		return this.update(collectionName, id, input, { partial: true, access }).andThen(() =>
-			this.found(collectionName, id)
+			this.found(collectionName, id, fields)
 		);
 	}
 
@@ -1177,12 +1235,13 @@ export class RecordsService extends Service {
 	/** A record that was just written, as the API returns it. */
 	private found(
 		collectionName: string,
-		id: string
+		id: string,
+		fields?: string[]
 	): ResultAsync<
 		ApiRecord,
 		ErrorOf<ReturnType<RecordsService['apiGet']>> | ServiceError<8003, 'RECORD_NOT_FOUND'>
 	> {
-		return this.apiGet(collectionName, id).andThen((record) =>
+		return this.apiGet(collectionName, id, { fields }).andThen((record) =>
 			record ? okAsync(record) : errAsync(this.error(8003, 'RECORD_NOT_FOUND'))
 		);
 	}
@@ -1240,7 +1299,7 @@ export class RecordsService extends Service {
 
 	/** Runs `compile` for a query parameter; a `FilterError` becomes an `INVALID_QUERY`. */
 	private compileQuery<T>(
-		param: 'filter' | 'sort',
+		param: 'filter' | 'sort' | 'fields',
 		compile: () => T
 	): ResultAsync<T, InvalidQueryError> {
 		try {

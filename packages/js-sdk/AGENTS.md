@@ -42,11 +42,11 @@ Sign-ins return `{ token, user_id }`; the token is a JWT (HS256, 7 days) sent as
 | `GET /api/auth/oauth2/<provider>?state=…&challenge=…` | `pb.auth.signInWithOAuth()` (popup)  |
 | `POST /api/auth/oauth2/result`                        | `pb.auth.signInWithOAuth()` (polls)  |
 | `GET /api/auth/me`                                    | `pb.auth.me()`                       |
-| `GET /api/collections/<name>/records?page&perPage&sort&filter` | `pb.collection(name).getList()`, `getFullList()`, `getFirstListItem()` |
-| `GET /api/collections/<name>/records/<id>`            | `pb.collection(name).getOne()`       |
-| `POST /api/collections/<name>/records`                | `pb.collection(name).create()`       |
-| `PATCH /api/collections/<name>/records/<id>`          | `pb.collection(name).update()`       |
-| `DELETE /api/collections/<name>/records/<id>` (`204`) | `pb.collection(name).delete()`       |
+| `GET /api/collections/<name>/records?page&perPage&sort&filter&fields` | `pb.db.<name>.findMany()`, `findFirst()`, `count()`, `iterate()`, `findAll()` |
+| `GET /api/collections/<name>/records/<id>?fields`     | `pb.db.<name>.find()`, `findOrThrow()` |
+| `POST /api/collections/<name>/records?fields`         | `pb.db.<name>.insert()`              |
+| `PATCH /api/collections/<name>/records/<id>?fields`   | `pb.db.<name>.patch()`               |
+| `DELETE /api/collections/<name>/records/<id>` (`204`) | `pb.db.<name>.remove()`              |
 | `GET /api/files/<id>`                                 | `pb.files.url()`                     |
 | `<method> /api/functions/<name>/<path>`               | `pb.functions.invoke()`              |
 | `GET /api/types?token=…` (text, not JSON)             | `fetchTypes()`, `pouchbase types`    |
@@ -58,7 +58,8 @@ Sign-ins return `{ token, user_id }`; the token is a JWT (HS256, 7 days) sent as
 - Enforced by ESLint (`curly`, `padding-line-between-statements`); run `pnpm exec eslint . --fix` to apply.
 - Tabs, single quotes, no trailing commas, 100 columns (Prettier, same as the app).
 - The SDK must run everywhere `fetch` exists: no Node built-ins, no DOM access outside browser-only methods (`signInWithOAuth`, `LocalAuthStore`), and no runtime dependencies.
-- Public methods return promises and throw a `PouchbaseError` for non-2xx responses; "not found" for lookups is `null`, not an error.
+- Public methods return promises and throw a `PouchbaseError` for non-2xx responses; "not found" for lookups is `null`, not an error. Record calls return a `Pending` (`pending()` in `src/error.ts`), so `.safe()` works on them.
+- The records API is wrapped in our own terms (`pb.db`, `where` objects, `find`/`insert`/`patch`/`remove`) with types from the generated `Schema`; don't copy another SDK's method names or shapes.
 - Every exported function, class and type has a JSDoc comment; the declaration files are the reference docs.
 
 ## Changesets

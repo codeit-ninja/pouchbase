@@ -3,8 +3,8 @@ import { PouchbaseError } from './error.js';
 import { AuthService } from './services/auth.js';
 import { FilesService } from './services/files.js';
 import { FunctionsService } from './services/functions.js';
-import { filter, RecordService } from './services/records.js';
-import type { BaseRecord } from './services/records.js';
+import { createDb } from './services/db.js';
+import type { Db } from './services/db.js';
 import type { DefaultCollections, Issues } from './types.js';
 
 /** Options for `new Pouchbase()`. */
@@ -39,8 +39,8 @@ export type RequestOptions = {
  * const user = await pb.auth.me();
  * ```
  *
- * Pass the `Collections` interface from `pouchbase types` to type the records of your collections:
- * `new Pouchbase<Collections>(url)`; `pb.collection('posts')` then returns typed records.
+ * Pass the `Schema` from `pouchbase types` to type your collections, or use `createClient()`:
+ * `new Pouchbase<Schema>(url)`; `pb.db.posts` then knows the fields of `posts`.
  */
 export class Pouchbase<C extends object = DefaultCollections> {
 	/** The instance's origin, without a trailing slash. */
@@ -52,6 +52,11 @@ export class Pouchbase<C extends object = DefaultCollections> {
 	readonly files: FilesService;
 	/** Serverless functions. */
 	readonly functions: FunctionsService;
+	/**
+	 * The records of every collection, typed by the schema: `pb.db.posts.findMany({ … })`. What a
+	 * caller may do follows each collection's API rules.
+	 */
+	readonly db: Db<C>;
 
 	#fetch: typeof fetch;
 	#headers: Record<string, string>;
@@ -64,28 +69,7 @@ export class Pouchbase<C extends object = DefaultCollections> {
 		this.auth = new AuthService<C>(this);
 		this.files = new FilesService(this);
 		this.functions = new FunctionsService(this);
-	}
-
-	/**
-	 * The records of a collection: list, view, create, update and delete them, as far as the
-	 * collection's API rules allow.
-	 *
-	 * ```ts
-	 * const posts = await pb.collection('posts').getList(1, 20, { sort: '-created_at' });
-	 * ```
-	 */
-	collection<K extends keyof C & string>(name: K): RecordService<C[K]>;
-	collection<T = BaseRecord>(name: string): RecordService<T>;
-	collection(name: string): RecordService<unknown> {
-		return new RecordService(this as Pouchbase, name);
-	}
-
-	/**
-	 * Fills `{:name}` placeholders in a filter expression with escaped values:
-	 * `pb.filter('title ~ {:search}', { search })`. See `filter()`.
-	 */
-	filter(expression: string, params: Record<string, unknown> = {}): string {
-		return filter(expression, params);
+		this.db = createDb<C>(this);
 	}
 
 	/** Absolute URL of an API path, such as `/api/health`. */
@@ -176,4 +160,23 @@ function isIssues(value: unknown): value is Issues {
 		typeof value === 'object' &&
 		Object.values(value).every((message) => typeof message === 'string')
 	);
+}
+
+/**
+ * Creates a client for one Pouchbase instance, typed by the `Schema` from `pouchbase types`:
+ *
+ * ```ts
+ * import type { Schema } from './pouchbase';
+ *
+ * const pb = createClient<Schema>('https://pouchbase.example.com', {
+ * 	authStore: new LocalAuthStore()
+ * });
+ * const { items } = await pb.db.posts.findMany({ where: { status: 'published' } });
+ * ```
+ */
+export function createClient<S extends object = DefaultCollections>(
+	baseUrl: string,
+	options: PouchbaseOptions = {}
+): Pouchbase<S> {
+	return new Pouchbase<S>(baseUrl, options);
 }

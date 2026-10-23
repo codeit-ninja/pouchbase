@@ -3,20 +3,21 @@ import type { RequestHandler } from './$types';
 import { json, noContent, preflight, requestUser } from '#lib/server/api.js';
 import { readJsonObject } from '#lib/server/api-body.js';
 
-import { errorResponse } from '../responses';
+import { errorResponse, requestedFields } from '../responses';
 
-/** One record, when the collection's view rule allows it; otherwise `404`. */
+/** One record (only `?fields=` when given), when the view rule allows it; otherwise `404`. */
 export const GET: RequestHandler = async (event) => {
-	const { params, locals } = event;
+	const { params, url, locals } = event;
 	const caller = await requestUser(event);
 
 	if ('response' in caller) {
 		return caller.response;
 	}
 
-	const result = await locals.services
-		.records()
-		.apiGet(params.collection, params.id, { auth: caller.user });
+	const result = await locals.services.records().apiGet(params.collection, params.id, {
+		access: { auth: caller.user },
+		fields: requestedFields(url)
+	});
 
 	if (result.isErr()) {
 		return errorResponse(result.error, 'Could not load the record');
@@ -34,7 +35,7 @@ export const GET: RequestHandler = async (event) => {
  * (otherwise `404`) → the updated record. Fields that are left out keep their value.
  */
 export const PATCH: RequestHandler = async (event) => {
-	const { params, request, locals } = event;
+	const { params, request, url, locals } = event;
 	const body = await readJsonObject(request);
 
 	if (!body) {
@@ -49,7 +50,7 @@ export const PATCH: RequestHandler = async (event) => {
 
 	const result = await locals.services
 		.records()
-		.apiUpdate(params.collection, params.id, body, { auth: caller.user });
+		.apiUpdate(params.collection, params.id, body, { auth: caller.user }, requestedFields(url));
 
 	if (result.isErr()) {
 		return errorResponse(result.error, 'Could not update the record');

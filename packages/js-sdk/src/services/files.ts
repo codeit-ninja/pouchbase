@@ -3,7 +3,7 @@ import type { Pouchbase } from '../client.js';
 /** Options for `pb.files.url()`. */
 export type FileUrlOptions = {
 	/**
-	 * A thumbnail size in PocketBase syntax, such as `100x100`. Only sizes configured on the `files`
+	 * A thumbnail size such as `100x100`. Only sizes configured on the `files`
 	 * collection are served; for others the original is returned.
 	 */
 	thumb?: string;
@@ -13,9 +13,9 @@ export type FileUrlOptions = {
 
 /** Files of the built-in `files` collection. Files are public; their ids are random. */
 export class FilesService {
-	readonly #pb: Pouchbase;
+	readonly #pb: Pouchbase<object>;
 
-	constructor(pb: Pouchbase) {
+	constructor(pb: Pouchbase<object>) {
 		this.#pb = pb;
 	}
 

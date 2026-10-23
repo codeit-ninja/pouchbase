@@ -6,39 +6,61 @@ import type { ResultAsync } from 'neverthrow';
 import { asc } from 'drizzle-orm';
 import { fromPromise, okAsync } from 'neverthrow';
 
-import { FIELD_TYPES } from '#lib/fields/field-types.js';
+import { FIELD_TYPES, isAutoType } from '#lib/fields/field-types.js';
 import { fieldValueType } from '#lib/fields/value-types.js';
 
 import { generateToken, hashToken } from '../crypto';
 import { collections, fields } from '../db';
 import { Service } from './base.service';
 
-/** `blog_posts` → `BlogPostsRecord`. */
-function interfaceName(collection: string) {
-	const pascal = collection
+/** `blog_posts` → `BlogPosts`. */
+function pascalCase(collection: string) {
+	return collection
 		.split('_')
 		.filter(Boolean)
 		.map((part) => part[0].toUpperCase() + part.slice(1))
 		.join('');
+}
 
-	return `${pascal}Record`;
+/** Whether the API returns an array for the field, `[]` when empty. */
+function isMultiple(field: Field) {
+	return (
+		(field.type === 'relation' || field.type === 'file' || field.type === 'list') &&
+		!!field.options.multiple
+	);
+}
+
+/** A JSDoc comment for a field. */
+function fieldDoc(field: Field, note: string | undefined) {
+	const doc = [
+		`\`${field.name}\` · ${FIELD_TYPES[field.type].label}${field.required ? ', required' : ''}.`,
+		note
+	]
+		.filter(Boolean)
+		.join(' ');
+
+	return `\t/** ${doc.replace(/\*\//g, '* /')} */`;
 }
 
 /**
- * TypeScript declarations for every collection: one `<Name>Record` interface per collection and a
- * `Collections` interface that maps collection names to them, for `new Pouchbase<Collections>()` in
- * the SDK. Values are typed as they are stored: booleans are `0 | 1`, JSON and multiple relations
- * are JSON text. Fields that are required or filled in by Pouchbase are not nullable.
+ * TypeScript declarations for every collection, matching the records API:
+ *
+ * - `<Name>Record`: a record as the API returns it. Fields that are required or filled in by
+ *   Pouchbase are not nullable; multiple relations, files and lists are arrays.
+ * - `<Name>Create`: what to send to create one. Fields Pouchbase fills in (id, timestamps,
+ *   computed fields) are left out; required fields without a default are required.
+ * - `Schema`: both per collection, for the SDK: `createClient<Schema>(url)`.
+ * - `Collections`: the record type per collection.
  */
 function declarations(appName: string, list: Collection[], all: Field[]) {
 	const collectionNames = new Map(list.map((collection) => [collection.id, collection.name]));
 	const used = new Set<string>();
 	const names = list.map((collection) => {
-		const base = interfaceName(collection.name);
+		const base = pascalCase(collection.name);
 		let name = base;
 
 		for (let suffix = 2; used.has(name); suffix++) {
-			name = `${base.slice(0, -'Record'.length)}${suffix}Record`;
+			name = `${base}${suffix}`;
 		}
 
 		used.add(name);
@@ -47,46 +69,77 @@ function declarations(appName: string, list: Collection[], all: Field[]) {
 	});
 
 	const interfaces = list.map((collection, index) => {
-		const members = all
-			.filter((field) => field.collectionId === collection.id)
-			.flatMap((field) => {
-				// The records API leaves blobs out.
-				if (field.type === 'blob') {
-					return [];
-				}
+		// The records API leaves blobs out.
+		const own = all.filter(
+			(field) => field.collectionId === collection.id && field.type !== 'blob'
+		);
+		const target = (field: Field) =>
+			field.options.collectionId ? collectionNames.get(field.options.collectionId) : undefined;
 
-				const value = fieldValueType(
-					field,
-					field.options.collectionId ? collectionNames.get(field.options.collectionId) : undefined
-				);
-				const filled = field.type === 'id' || field.type === 'created' || field.type === 'updated';
-				const nullable = !filled && !field.required;
-				const doc = [
-					`\`${field.name}\` · ${FIELD_TYPES[field.type].label}${field.required ? ', required' : ''}.`,
-					value.note
-				]
-					.filter(Boolean)
-					.join(' ');
+		const record = own.flatMap((field) => {
+			const value = fieldValueType(field, target(field));
+			const filled = field.type === 'id' || field.type === 'created' || field.type === 'updated';
+			const nullable = !filled && !field.required && !isMultiple(field);
+
+			return [
+				fieldDoc(field, value.note),
+				`\t${field.name}: ${value.type}${nullable ? ' | null' : ''};`
+			];
+		});
+
+		const create = own
+			.filter((field) => !isAutoType(field.type) && field.type !== 'computed')
+			.flatMap((field) => {
+				const value = fieldValueType(field, target(field));
+				const optional = !field.required || !!field.defaultValue;
+				// Dates may also be sent as a `Date`; it is sent as ISO 8601 text.
+				const type = field.type === 'date' ? `${value.type} | Date` : value.type;
 
 				return [
-					`\t/** ${doc} */`,
-					`\t${field.name}: ${value.type}${nullable && value.type !== 'unknown' ? ' | null' : ''};`
+					fieldDoc(field, value.note),
+					`\t${field.name}${optional ? '?' : ''}: ${type}${optional ? ' | null' : ''};`
 				];
 			});
 
 		return [
-			`/** A record of \`${collection.name}\`. */`,
-			`export interface ${names[index]} {`,
-			...members,
+			`/** A record of \`${collection.name}\`, as the API returns it. */`,
+			`export interface ${names[index]}Record {`,
+			...record,
+			'}',
+			'',
+			`/** The fields to send to create a record of \`${collection.name}\`. */`,
+			`export interface ${names[index]}Create {`,
+			...create,
 			'}'
 		].join('\n');
 	});
 
-	const map = [
-		'/** Every collection, by name. Pass it to the SDK: `new Pouchbase<Collections>(url)`. */',
-		'export interface Collections {',
-		...list.map((collection, index) => `\t${collection.name}: ${names[index]};`),
+	const schema = [
+		'/** Every collection, by name, with its record and create types: `createClient<Schema>(url)`. */',
+		'export interface Schema {',
+		...list.map(
+			(collection, index) =>
+				`\t${collection.name}: { $record: ${names[index]}Record; $create: ${names[index]}Create };`
+		),
 		'}'
+	].join('\n');
+
+	const map = [
+		'/** The record type of every collection, by name. */',
+		'export interface Collections {',
+		...list.map((collection, index) => `\t${collection.name}: ${names[index]}Record;`),
+		'}'
+	].join('\n');
+
+	const json = [
+		'/** A value of a JSON field. */',
+		'export type JsonValue =',
+		'\t| string',
+		'\t| number',
+		'\t| boolean',
+		'\t| null',
+		'\t| JsonValue[]',
+		'\t| { [key: string]: JsonValue };'
 	].join('\n');
 
 	return (
@@ -97,7 +150,9 @@ function declarations(appName: string, list: Collection[], all: Field[]) {
 				' * Generate them again after changing a collection; edits to this file are overwritten.',
 				' */'
 			].join('\n'),
+			json,
 			...interfaces,
+			schema,
 			map
 		].join('\n\n') + '\n'
 	);
