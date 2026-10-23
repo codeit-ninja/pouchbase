@@ -1,0 +1,75 @@
+# Builds the single binaries (`pnpm build:binary`, see scripts/build-binary.mjs) for a release and
+# attaches them to it: pouchbase-linux-x64, pouchbase-linux-arm64, pouchbase-macos-arm64 and
+# pouchbase-windows-x64.exe. Every binary is built on its own platform, because a Node single
+# executable can only be generated from the Node binary it embeds. Normally called by release.yml
+# after Changesets created the release; run it by hand to rebuild the binaries of an existing tag.
+
+name: Binaries
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build, e.g. v1.2.3
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build, e.g. v1.2.3
+        required: true
+
+concurrency:
+  group: binaries-${{ inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            runner: ubuntu-latest
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+          # Node doesn't support single executables on Intel Macs.
+          - name: macos-arm64
+            runner: macos-latest
+          - name: windows-x64
+            runner: windows-latest
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build the binary
+        run: pnpm build:binary
+
+      - name: Smoke test
+        shell: bash
+        run: ./dist/pouchbase-* --version
+
+      - name: Attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ inputs.tag }}" dist/pouchbase-* --clobber

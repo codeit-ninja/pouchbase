@@ -1,22 +1,15 @@
 <script lang="ts">
-	import * as Icon from '#lib/components/ui/icon/index.js';
 	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
-	import * as Button from '#lib/components/ui/button/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as Form from '#lib/components/ui/form/index.js';
+	import * as Icon from '#lib/components/ui/icon/index.js';
 	import * as Logo from '#lib/components/ui/logo/index.js';
+	import * as Navigation from '#lib/components/ui/navigation/index.js';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
 	import { getAppName } from '#lib/remote/settings.remote.js';
 	import { currentUser, logout } from '../(auth)/auth.remote';
-	import { listCollections } from './collections.remote';
-	import CreateCollectionDialog from './create-collection-dialog.svelte';
+	import CollectionsNavigation from './collections-navigation.svelte';
 
-	const [appName, user, collections] = $derived(
-		await Promise.all([getAppName(), currentUser(), listCollections()])
-	);
-
-	const dialogs = Dialog.getDialogs();
+	const [appName, user] = $derived(await Promise.all([getAppName(), currentUser()]));
 </script>
 
 <Sidebar.Root>
@@ -28,69 +21,82 @@
 		</div>
 	</Sidebar.Header>
 
-	<Sidebar.Content aria-label="Main">
+	<Sidebar.Content>
 		<Sidebar.Group>
-			<Sidebar.GroupHeader>
-				<Sidebar.GroupLabel>Collections</Sidebar.GroupLabel>
-
-				<Button.Root
-					variant="ghost"
-					size="icon"
-					aria-label="Create collection"
-					onclick={() => void dialogs.open(CreateCollectionDialog)}
-				>
-					<Icon.Root icon="lucide:plus" />
-				</Button.Root>
-			</Sidebar.GroupHeader>
-
-			{#if collections.length}
-				<Sidebar.Menu>
-					{#each collections as collection (collection.id)}
-						{@const href = resolve('/(app)/collections/[name]', { name: collection.name })}
-
-						<Sidebar.MenuItem>
-							<Sidebar.MenuLink {href} active={page.url.pathname === href}>
-								{#if collection.system}
-									<Icon.Root icon="lucide:users" />
-								{:else}
-									<Icon.Root icon="lucide:table-2" />
-								{/if}
-								<span class="truncate">{collection.name}</span>
-							</Sidebar.MenuLink>
-						</Sidebar.MenuItem>
-					{/each}
-				</Sidebar.Menu>
-			{:else}
-				<Sidebar.Empty>No collections yet.</Sidebar.Empty>
-			{/if}
+			<Navigation.Root aria-label="Main">
+				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)')}>
+						<Icon.Root icon="lucide:layout-dashboard" />
+						Dashboard
+					</Navigation.Link>
+				</Navigation.Item>
+			</Navigation.Root>
 		</Sidebar.Group>
 
+		<CollectionsNavigation />
+
 		<Sidebar.Group>
-			<Sidebar.GroupHeader class="h-control">
+			<Sidebar.GroupHeader class="h-row">
 				<Sidebar.GroupLabel>System</Sidebar.GroupLabel>
 			</Sidebar.GroupHeader>
 
-			<Sidebar.Menu>
-				<Sidebar.MenuItem>
-					<Sidebar.MenuLink
-						href={resolve('/(app)/auth')}
-						active={page.url.pathname === resolve('/(app)/auth')}
-					>
+			<Navigation.Root aria-label="System">
+				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/functions')}>
+						<Icon.Root icon="lucide:square-function" />
+						Functions
+					</Navigation.Link>
+				</Navigation.Item>
+
+				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/storage')}>
+						<Icon.Root icon="lucide:hard-drive" />
+						Storage
+					</Navigation.Link>
+				</Navigation.Item>
+
+				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/backups')}>
+						<Icon.Root icon="lucide:database-backup" />
+						Backups
+					</Navigation.Link>
+				</Navigation.Item>
+
+				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/auth')}>
 						<Icon.Root icon="lucide:shield-check" />
 						Authentication
-					</Sidebar.MenuLink>
-				</Sidebar.MenuItem>
+					</Navigation.Link>
+				</Navigation.Item>
 
-				<Sidebar.MenuItem>
-					<Sidebar.MenuLink
-						href={resolve('/(app)/settings')}
-						active={page.url.pathname === resolve('/(app)/settings')}
-					>
+				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/admins')}>
+						<Icon.Root icon="lucide:user-cog" />
+						Admins
+					</Navigation.Link>
+				</Navigation.Item>
+
+				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/types')}>
+						<Icon.Root icon="lucide:file-code" />
+						Types
+					</Navigation.Link>
+				</Navigation.Item>
+
+				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/plugins')}>
+						<Icon.Root icon="lucide:puzzle" />
+						Plugins
+					</Navigation.Link>
+				</Navigation.Item>
+
+				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/settings')}>
 						<Icon.Root icon="lucide:settings" />
 						Settings
-					</Sidebar.MenuLink>
-				</Sidebar.MenuItem>
-			</Sidebar.Menu>
+					</Navigation.Link>
+				</Navigation.Item>
+			</Navigation.Root>
 		</Sidebar.Group>
 	</Sidebar.Content>
 

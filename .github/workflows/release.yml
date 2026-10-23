@@ -1,0 +1,128 @@
+# Releases Pouchbase with Changesets, on every push to main:
+#
+# 1. With pending changesets, it opens (or updates) a "Version Packages" pull request that bumps the
+#    version in package.json and writes CHANGELOG.md (`pnpm changeset:version`).
+# 2. Once that pull request is merged, there are no pending changesets and the new version has no
+#    tag yet: it creates the tag and a GitHub release with the changelog entry as notes, then builds
+#    and pushes the Docker image (docker.yml) and attaches the single binaries (binaries.yml).
+#
+# Releases made with the GITHUB_TOKEN don't trigger other workflows, which is why the Docker image and
+# the binaries are built by calling their workflows from here instead of through a `release` trigger.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Version or release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Create or update the version pull request
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm changeset:version
+          title: Version Packages
+          commit: Version Packages
+        env:
+          # Also used by @changesets/changelog-github to link pull requests and authors.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and release the new version
+        id: release
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="v${version}"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" > /dev/null; then
+            echo "${tag} is already released."
+            exit 0
+          fi
+
+          # The changelog entry of this version: everything from "## <version>" up to the next "## ".
+          notes=$(awk -v heading="## ${version}" '
+            $0 == heading { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md 2>/dev/null || true)
+
+          # Only versions bumped by Changesets are released, never the initial version.
+          if [ -z "$notes" ]; then
+            echo "CHANGELOG.md has no entry for ${version}; nothing to release."
+            exit 0
+          fi
+
+          prerelease=false
+          flags=()
+
+          if [[ "$version" == *-* ]]; then
+            prerelease=true
+            flags+=(--prerelease)
+          else
+            flags+=(--latest)
+          fi
+
+          printf '%s\n' "$notes" > "$RUNNER_TEMP/notes.md"
+          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" \
+            --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+
+  docker:
+    name: Docker image
+    needs: release
+    if: needs.release.outputs.tag != ''
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/docker.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+      latest: ${{ needs.release.outputs.prerelease != 'true' }}
+
+  binaries:
+    name: Binaries
+    needs: release
+    if: needs.release.outputs.tag != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/binaries.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}

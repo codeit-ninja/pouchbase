@@ -31,9 +31,9 @@ export const passwordSignUpSchema = z.object({
 
 export type PasswordSignUpInput = z.input<typeof passwordSignUpSchema>;
 
-/** Sign-in of an app user with username and password (public API). */
+/** Sign-in of an app user with username or email, and password (public API). */
 export const passwordSignInSchema = z.object({
-	username: z.string().trim().toLowerCase().min(1, 'Enter your username'),
+	identity: z.string().trim().toLowerCase().min(1, 'Enter your username or email'),
 	password: z.string().min(1, 'Enter your password')
 });
 
@@ -41,4 +41,23 @@ export const passwordSignInSchema = z.object({
 export const passwordProviderSchema = z.object({
 	enabled: z.boolean().default(false),
 	signUp: z.boolean().default(false)
+});
+
+/** New password from the reset email (account page). */
+export const resetPasswordSchema = z
+	.object({
+		/** Hidden field: the token from the link. */
+		token: z.string().min(1),
+		_password: appPassword,
+		_passwordConfirm: z.string()
+	})
+	.refine((data) => data._password === data._passwordConfirm, {
+		path: ['_passwordConfirm'],
+		message: 'Passwords do not match'
+	});
+
+/** Confirms the address with the token from the verification email (account page). */
+export const verifyEmailSchema = z.object({
+	/** Hidden field: the token from the link. */
+	token: z.string().min(1)
 });

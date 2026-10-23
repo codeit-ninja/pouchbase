@@ -4,7 +4,7 @@ import type { Field } from './fields.service';
 
 import { errAsync, fromPromise, okAsync, ResultAsync } from 'neverthrow';
 
-import { queryDatabase } from '../cloudflare/d1';
+import { queryDatabase } from '../db/query';
 import { Service } from './base.service';
 import { uniqueIndexName } from './fields.service';
 
@@ -16,12 +16,11 @@ export type CollectionIndex = {
 	managedBy: string | null;
 };
 
-export type CreateIndexInput = {
+export type IndexInput = {
 	columns: string[];
 	unique: boolean;
 };
 
-const SYSTEM_COLUMNS = ['id', 'created_at', 'updated_at'];
 const MAX_COLUMNS = 8;
 const NAME_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -31,12 +30,11 @@ function randomIndexName() {
 	return `ix_${Array.from(bytes, (byte) => NAME_ALPHABET[byte % NAME_ALPHABET.length]).join('')}`;
 }
 
-/** Columns an index can be created on: system columns and every field except blobs. */
+/** Columns an index can be created on: every field except blobs. */
 function indexableColumns(collectionFields: Field[]) {
-	return new Set([
-		...SYSTEM_COLUMNS,
-		...collectionFields.filter((field) => field.type !== 'blob').map((field) => field.name)
-	]);
+	return new Set(
+		collectionFields.filter((field) => field.type !== 'blob').map((field) => field.name)
+	);
 }
 
 /** Groups the pragma rows per index and marks the ones owned by a "Unique" field. */
@@ -89,7 +87,7 @@ export class IndexesService extends Service {
 
 	create(
 		collectionName: string,
-		input: CreateIndexInput
+		input: IndexInput
 	): ResultAsync<
 		CollectionIndex,
 		| ServiceError<1004, 'APP_DATABASE_MISSING'>
@@ -101,35 +99,50 @@ export class IndexesService extends Service {
 		| ServiceError<9002, 'DUPLICATE_VALUES'>
 		| ServiceError<9003, 'CREATE_INDEX_FAILED'>
 	> {
-		const columns = [...new Set(input.columns)];
+		return this.context(collectionName).andThen(({ collection, fields, databaseId }) =>
+			this.createIndex(databaseId, collection, fields, input)
+		);
+	}
 
-		if (!columns.length || columns.length > MAX_COLUMNS) {
-			return errAsync(this.error(9001, 'INVALID_INDEX_COLUMNS'));
-		}
-
-		return this.context(collectionName).andThen(({ collection, fields, databaseId }) => {
-			const allowed = indexableColumns(fields);
-
-			// Column names end up in SQL, so only known columns are accepted.
-			if (!columns.every((column) => allowed.has(column))) {
-				return errAsync(this.error(9001, 'INVALID_INDEX_COLUMNS'));
-			}
-
-			const name = randomIndexName();
-
-			return fromPromise(
-				queryDatabase(
-					databaseId,
-					`CREATE ${input.unique ? 'UNIQUE ' : ''}INDEX "${name}" ON "${collection.name}" (${columns.map((column) => `"${column}"`).join(', ')})`
-				),
-				(error) =>
-					String(error instanceof Error ? error.message : error).includes(
-						'UNIQUE constraint failed'
+	/**
+	 * Changes the columns or uniqueness of a custom index. SQLite can't alter an index, so a new
+	 * one is created first and the old one is dropped after; if creating fails, nothing changes.
+	 */
+	update(
+		collectionName: string,
+		name: string,
+		input: IndexInput
+	): ResultAsync<
+		CollectionIndex,
+		| ServiceError<1004, 'APP_DATABASE_MISSING'>
+		| ServiceError<5000, 'GET_SETTING_FAILED'>
+		| ServiceError<6001, 'GET_COLLECTION_FAILED'>
+		| ServiceError<6006, 'COLLECTION_NOT_FOUND'>
+		| ServiceError<7000, 'LIST_FIELDS_FAILED'>
+		| ServiceError<9001, 'INVALID_INDEX_COLUMNS'>
+		| ServiceError<9002, 'DUPLICATE_VALUES'>
+		| ServiceError<9003, 'CREATE_INDEX_FAILED'>
+		| ServiceError<9004, 'INDEX_NOT_FOUND'>
+		| ServiceError<9006, 'UPDATE_INDEX_FAILED'>
+	> {
+		return this.context(collectionName).andThen(({ collection, fields, databaseId }) =>
+			this.findCustom(databaseId, collection, fields, name, 9006, 'UPDATE_INDEX_FAILED').andThen(
+				(index) =>
+					this.createIndex(databaseId, collection, fields, input).andThen((created) =>
+						fromPromise(queryDatabase(databaseId, `DROP INDEX "${index.name}"`), (error) =>
+							this.error(9006, 'UPDATE_INDEX_FAILED', error)
+						)
+							// Keep a single index: remove the new one again when the old one stays.
+							.orElse((error) =>
+								fromPromise(
+									queryDatabase(databaseId, `DROP INDEX "${created.name}"`),
+									() => error
+								).andThen(() => errAsync(error))
+							)
+							.map(() => created)
 					)
-						? this.error(9002, 'DUPLICATE_VALUES', error)
-						: this.error(9003, 'CREATE_INDEX_FAILED', error)
-			).map(() => ({ name, columns, unique: input.unique, managedBy: null }));
-		});
+			)
+		);
 	}
 
 	/** Drops a custom index. Indexes owned by a "Unique" field are removed through that field. */
@@ -147,22 +160,73 @@ export class IndexesService extends Service {
 		| ServiceError<9005, 'DELETE_INDEX_FAILED'>
 	> {
 		return this.context(collectionName).andThen(({ collection, fields, databaseId }) =>
-			fromPromise(this.read(databaseId, collection, fields), (error) =>
-				this.error(9005, 'DELETE_INDEX_FAILED', error)
-			)
-				.andThen((indexes) => {
-					const index = indexes.find((candidate) => candidate.name === name);
-
-					return index && !index.managedBy
-						? okAsync(index)
-						: errAsync(this.error(9004, 'INDEX_NOT_FOUND'));
-				})
-				.andThen((index) =>
+			this.findCustom(databaseId, collection, fields, name, 9005, 'DELETE_INDEX_FAILED').andThen(
+				(index) =>
 					fromPromise(queryDatabase(databaseId, `DROP INDEX "${index.name}"`), (error) =>
 						this.error(9005, 'DELETE_INDEX_FAILED', error)
 					).map(() => undefined)
-				)
+			)
 		);
+	}
+
+	/** Creates an index on known columns only, since column names end up in SQL. */
+	private createIndex(
+		databaseId: string,
+		collection: Collection,
+		fields: Field[],
+		input: IndexInput
+	): ResultAsync<
+		CollectionIndex,
+		| ServiceError<9001, 'INVALID_INDEX_COLUMNS'>
+		| ServiceError<9002, 'DUPLICATE_VALUES'>
+		| ServiceError<9003, 'CREATE_INDEX_FAILED'>
+	> {
+		const columns = [...new Set(input.columns)];
+		const allowed = indexableColumns(fields);
+
+		if (
+			!columns.length ||
+			columns.length > MAX_COLUMNS ||
+			!columns.every((column) => allowed.has(column))
+		) {
+			return errAsync(this.error(9001, 'INVALID_INDEX_COLUMNS'));
+		}
+
+		const name = randomIndexName();
+
+		return fromPromise(
+			queryDatabase(
+				databaseId,
+				`CREATE ${input.unique ? 'UNIQUE ' : ''}INDEX "${name}" ON "${collection.name}" (${columns.map((column) => `"${column}"`).join(', ')})`
+			),
+			(error) =>
+				String(error instanceof Error ? error.message : error).includes('UNIQUE constraint failed')
+					? this.error(9002, 'DUPLICATE_VALUES', error)
+					: this.error(9003, 'CREATE_INDEX_FAILED', error)
+		).map(() => ({ name, columns, unique: input.unique, managedBy: null }));
+	}
+
+	/** A custom index by name; indexes owned by a "Unique" field are changed through that field. */
+	private findCustom<Code extends number, Message extends string>(
+		databaseId: string,
+		collection: Collection,
+		fields: Field[],
+		name: string,
+		code: Code,
+		message: Message
+	): ResultAsync<
+		CollectionIndex,
+		ServiceError<9004, 'INDEX_NOT_FOUND'> | ServiceError<Code, Message>
+	> {
+		return fromPromise(this.read(databaseId, collection, fields), (error) =>
+			this.error(code, message, error)
+		).andThen((indexes) => {
+			const found = indexes.find((candidate) => candidate.name === name);
+
+			return found && !found.managedBy
+				? okAsync(found)
+				: errAsync(this.error(9004, 'INDEX_NOT_FOUND'));
+		});
 	}
 
 	private context(

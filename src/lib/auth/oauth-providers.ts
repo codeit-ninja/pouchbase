@@ -2,28 +2,28 @@
 export const OAUTH_PROVIDERS = {
 	google: {
 		label: 'Google',
-		icon: 'simple-icons:google',
+		icon: 'logos:google-icon',
 		consoleUrl: 'https://console.cloud.google.com/apis/credentials'
 	},
 	github: {
 		label: 'GitHub',
-		icon: 'simple-icons:github',
+		icon: 'logos:github-icon',
 		consoleUrl: 'https://github.com/settings/developers'
 	},
 	microsoft: {
 		label: 'Microsoft',
-		icon: 'simple-icons:microsoft',
+		icon: 'logos:microsoft-icon',
 		consoleUrl:
 			'https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade'
 	},
 	discord: {
 		label: 'Discord',
-		icon: 'simple-icons:discord',
+		icon: 'logos:discord-icon',
 		consoleUrl: 'https://discord.com/developers/applications'
 	},
 	twitch: {
 		label: 'Twitch',
-		icon: 'simple-icons:twitch',
+		icon: 'logos:twitch',
 		consoleUrl: 'https://dev.twitch.tv/console/apps'
 	}
 } as const;

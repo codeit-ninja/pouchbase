@@ -1,2 +1,19 @@
-onlyBuiltDependencies:
-  - esbuild
+packages:
+  - packages/*
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
+
+# Temporary: these versions were resolved before the pnpm 12 upgrade and are younger
+# than the default minimumReleaseAge (1 day). Remove after 2026-10-24.
+minimumReleaseAgeExclude:
+  - '@changesets/format@0.1.3'
+  - '@cloudflare/workers-types@5.20261023.1'
+  - bits-ui@2.20.2
+  - linkifyjs@4.4.0
+  - miniflare@5.20261019.2-beta
+  - prosemirror-transform@1.12.4
+  - svelte-eslint-parser@1.10.0
+  - wrangler@4.152.0

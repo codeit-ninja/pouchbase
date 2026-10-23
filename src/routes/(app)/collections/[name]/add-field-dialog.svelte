@@ -1,62 +1,53 @@
 <script lang="ts">
-	import type { FieldType, RichTextFormat } from '#lib/fields/field-types.js';
+	import type { FieldType } from '#lib/fields/field-types.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import type { DialogProps } from '#lib/components/ui/dialog/index.js';
 	import * as Form from '#lib/components/ui/form/index.js';
-	import { FIELD_TYPE_IDS, FIELD_TYPES } from '#lib/fields/field-types.js';
+	import { FIELD_TYPE_IDS, FIELD_TYPES, isAutoType } from '#lib/fields/field-types.js';
 	import { createFieldSchema } from '#lib/schemas/fields.js';
 	import { listCollections } from '../../collections.remote';
+	import ComputeOptions from './compute-options.svelte';
+	import FieldSettings from './field-settings.svelte';
 	import { createField } from './fields.remote';
+	import type { GridField } from './grid';
 
 	type Props = {
 		collection: { id: string; name: string };
+		/** Existing fields of the collection; a computed field is calculated from one of them. */
+		fields?: GridField[];
 	} & DialogProps;
 
-	let { collection, close }: Props = $props();
+	let { collection, fields = [], close }: Props = $props();
 
 	const form = $derived(createField.for(collection.id).preflight(createFieldSchema));
 
 	// `value()` stays undefined until the control is changed, so fall back to the initial values.
 	const type = $derived((form.fields.type.value() as FieldType | undefined) ?? 'text');
-	const format = $derived((form.fields.format.value() as RichTextFormat | undefined) ?? 'html');
+	const multiple = $derived(!!form.fields.multiple.value());
 
+	// Not awaited, so it never holds back opening the dialog (the sidebar has usually loaded it).
 	const collectionItems = $derived(
-		(await listCollections()).map((item) => ({
+		(listCollections().current ?? []).map((item) => ({
 			value: item.id,
 			label: item.name,
 			description: item.id === collection.id ? 'This collection' : undefined
 		}))
 	);
 
-	const typeItems = FIELD_TYPE_IDS.map((id) => ({
-		value: id,
-		label: FIELD_TYPES[id].label,
-		description: FIELD_TYPES[id].description,
-		icon: FIELD_TYPES[id].icon
-	}));
-
-	const formatItems = [
-		{ value: 'html', label: 'HTML', description: 'Stored as HTML markup.' },
-		{ value: 'markdown', label: 'Markdown', description: 'Stored as Markdown text.' }
-	];
-
-	const booleanItems = [
-		{ value: '', label: 'None' },
-		{ value: 'true', label: 'True' },
-		{ value: 'false', label: 'False' }
-	];
-
-	const defaultPlaceholders: Partial<Record<FieldType, string>> = {
-		number: '0.5',
-		integer: '0',
-		date: '2026-01-31',
-		email: 'name@example.com',
-		url: 'https://example.com',
-		json: '{"key": "value"}'
-	};
+	// A collection has at most one id field: its primary key.
+	const typeItems = $derived(
+		FIELD_TYPE_IDS.filter((id) => id !== 'id' || !fields.some((field) => field.type === 'id')).map(
+			(id) => ({
+				value: id,
+				label: FIELD_TYPES[id].label,
+				description: FIELD_TYPES[id].description,
+				icon: FIELD_TYPES[id].icon
+			})
+		)
+	);
 </script>
 
-<Dialog.Content class="max-w-lg">
+<Dialog.Content size={type === 'computed' ? 'lg' : 'md'}>
 	<Dialog.Header>
 		<Dialog.Title>Add field</Dialog.Title>
 		<Dialog.Description>
@@ -66,6 +57,7 @@
 
 	<Form.Root
 		{form}
+		success="Field added"
 		oninput={() => form.validate()}
 		enhance={async (instance) => {
 			if (await instance.submit()) {
@@ -89,14 +81,6 @@
 			<Form.Errors />
 		</Form.Field>
 
-		{#if type === 'rich_text'}
-			<Form.Field field={form.fields.format}>
-				<Form.Label>Store as</Form.Label>
-				<Form.Select items={formatItems} defaultValue="html" />
-				<Form.Errors />
-			</Form.Field>
-		{/if}
-
 		{#if type === 'relation'}
 			<Form.Field field={form.fields.relationCollection}>
 				<Form.Label>Related collection</Form.Label>
@@ -104,43 +88,24 @@
 				<Form.Description>Records of this collection can be linked.</Form.Description>
 				<Form.Errors />
 			</Form.Field>
-
-			<Form.Field field={form.fields.multiple} orientation="horizontal">
-				<Form.Checkbox />
-				<Form.Label>Allow multiple</Form.Label>
-				<Form.Description class="w-full pl-6">
-					Link several records instead of one; stored as a JSON array of ids.
-				</Form.Description>
-			</Form.Field>
 		{/if}
 
-		{#if FIELD_TYPES[type].defaultable}
-			<Form.Field field={form.fields.defaultValue}>
-				<Form.Label>Default value</Form.Label>
+		<FieldSettings {type} formFields={form.fields} />
 
-				{#if type === 'rich_text'}
-					{#key format}
-						<Form.RichText {format} placeholder="Optional" />
-					{/key}
-				{:else if type === 'boolean'}
-					<Form.Select items={booleanItems} defaultValue="" />
-				{:else}
-					<Form.Input placeholder={defaultPlaceholders[type] ?? 'Optional'} autocomplete="off" />
-				{/if}
-
-				<Form.Description>Used when a record doesn't set this field.</Form.Description>
-				<Form.Errors />
-			</Form.Field>
+		{#if type === 'computed'}
+			<ComputeOptions {collection} {fields} formFields={form.fields} />
 		{/if}
 
 		<div class="flex flex-col gap-3">
-			<Form.Field field={form.fields.required} orientation="horizontal">
-				<Form.Checkbox />
-				<Form.Label>Required</Form.Label>
-				<Form.Description class="w-full pl-6">Records must have a value.</Form.Description>
-			</Form.Field>
+			{#if type !== 'computed' && !isAutoType(type)}
+				<Form.Field field={form.fields.required} orientation="horizontal">
+					<Form.Checkbox />
+					<Form.Label>Required</Form.Label>
+					<Form.Description class="w-full pl-6">Records must have a value.</Form.Description>
+				</Form.Field>
+			{/if}
 
-			{#if type !== 'relation'}
+			{#if type !== 'relation' && type !== 'file' && !isAutoType(type) && !(type === 'list' && multiple)}
 				<Form.Field field={form.fields.unique} orientation="horizontal">
 					<Form.Checkbox />
 					<Form.Label>Unique</Form.Label>

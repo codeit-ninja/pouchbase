@@ -13,28 +13,45 @@ the database, the Cloudflare API or crypto directly; they call a service and han
 
 ```
 src/lib/server/
-├── cloudflare/d1.ts        # infrastructure: Cloudflare REST client, D1 over HTTP (throws).
-│                           # `pouchbase` = system DB; the app DB has a random name (see settings)
+├── platform/               # infrastructure: the DatabaseDriver and StorageDriver per platform (throw)
+│   ├── types.ts            # driver interfaces, PlatformError
+│   ├── index.ts            # the drivers in use: re-exports ./cloudflare (there are no others;
+│   │                       # the data always lives on D1 and R2, also when self-hosting on Node)
+│   ├── cloudflare/         # D1, R2 and function Workers over the Cloudflare REST API (works
+│   │                       # from Workers and Node)
+│   └── s3/                 # createS3Storage(): uploads in an S3-compatible bucket (Storage page)
+├── db/query.ts             # raw queries on top of the database driver: `pouchbase` = system DB;
+│                           # the app DB has a random name (id and name in settings)
 ├── db/                     # Drizzle schema, client and migrator (throws)
 ├── crypto.ts               # password hashing, tokens (throws)
 ├── hooks/                  # boot.ts, session.ts, guard.ts → sequence() in src/hooks.server.ts
 └── services/
     ├── auth.service.ts
+    ├── backups.service.ts  # backups to S3-compatible buckets, schedules and restores
     ├── base.service.ts     # ServiceError type + Service base class
+    ├── cloudflare.service.ts # dashboard overview of the Cloudflare account (resources, usage, limits)
     ├── services.ts         # Services registry (one method per service)
     ├── collections.service.ts
     ├── database.service.ts
     ├── fields.service.ts
+    ├── files.service.ts
+    ├── functions.service.ts # serverless functions: one Worker each, versions, secrets, logs
     ├── indexes.service.ts
     ├── install.service.ts
+    ├── mail.service.ts     # mail settings and sending (Cloudflare Email Service or SMTP)
     ├── oauth-providers.service.ts
+    ├── plugins.service.ts  # plugins from the plugin registry: search, install, remove
     ├── records.service.ts
     ├── sessions.service.ts
     ├── settings.service.ts
+    ├── storage.service.ts  # uploads: R2 by default, or the S3 bucket from the settings
+    ├── types.service.ts    # TypeScript types of the collections, and the token of /api/types
     └── users.service.ts
 ```
 
-Infrastructure modules (`cloudflare/`, `db/`, `crypto.ts`) are plain functions that **throw**.
+Infrastructure modules (`platform/`, `db/`, `crypto.ts`) are plain functions that **throw**.
+Services never import a driver directly: they use `db/query.ts` (`queryDatabase`, `rawQuery`, ...)
+or `storage`/`insights`/`functions` from `../platform`, so the same code runs on Workers and on Node.
 Services are the boundary where throwing code is wrapped into `ResultAsync`.
 
 ## Writing a service
@@ -91,6 +108,14 @@ app**; each service owns a range:
 | 9000  | indexes     |
 | 10000 | oauth providers |
 | 11000 | auth (app users) |
+| 12000 | storage (uploads) |
+| 13000 | files |
+| 14000 | cloudflare (dashboard overview) |
+| 15000 | mail |
+| 16000 | backups |
+| 17000 | types (TypeScript types of the collections) |
+| 18000 | functions (serverless functions on their own Workers) |
+| 19000 | plugins (plugin registry, installed plugins) |
 
 A new service takes the next free range (6000, 7000, ...). Never reuse a code.
 

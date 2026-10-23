@@ -6,6 +6,7 @@
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
 	import { getAppName } from '#lib/remote/settings.remote.js';
 	import { generalSettingsSchema } from '#lib/schemas/settings.js';
+	import MailSettings from './mail-settings.svelte';
 	import { updateGeneralSettings } from './settings.remote';
 
 	const appName = $derived(await getAppName());
@@ -35,7 +36,7 @@
 
 		<Card.Root>
 			<Card.Content>
-				<Form.Root form={generalForm}>
+				<Form.Root form={generalForm} success="Settings saved">
 					<Form.Field field={generalForm.fields.appName}>
 						<Form.Label>App name</Form.Label>
 						<Form.Input defaultValue={appName} autocomplete="off" />
@@ -48,5 +49,7 @@
 				</Form.Root>
 			</Card.Content>
 		</Card.Root>
+
+		<MailSettings />
 	</div>
 </Page.Root>

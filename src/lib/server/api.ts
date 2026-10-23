@@ -20,6 +20,11 @@ export function json(body: unknown, status = 200) {
 	});
 }
 
+/** Plain text response with CORS headers, e.g. generated code. */
+export function text(body: string, contentType = 'text/plain; charset=utf-8') {
+	return new Response(body, { headers: { ...CORS_HEADERS, 'Content-Type': contentType } });
+}
+
 /** Answers a CORS preflight request. */
 export function preflight() {
 	return new Response(null, { status: 204, headers: CORS_HEADERS });

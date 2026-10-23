@@ -7,7 +7,7 @@
 <td
 	{...rest}
 	class={[
-		'h-control max-w-80 truncate border-r border-b border-zinc-200 px-3 whitespace-nowrap text-zinc-700 last:border-r-0',
+		'h-row max-w-80 truncate border-r border-b border-zinc-200 px-3 whitespace-nowrap text-zinc-700 last:border-r-0',
 		className
 	]}
 >

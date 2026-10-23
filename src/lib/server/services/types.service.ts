@@ -1,0 +1,222 @@
+import type { ServiceError } from './base.service';
+import type { Collection } from './collections.service';
+import type { Field } from './fields.service';
+import type { ResultAsync } from 'neverthrow';
+
+import { asc } from 'drizzle-orm';
+import { fromPromise, okAsync } from 'neverthrow';
+
+import { FIELD_TYPES, idGenerator } from '#lib/fields/field-types.js';
+
+import { generateToken, hashToken } from '../crypto';
+import { collections, fields } from '../db';
+import { Service } from './base.service';
+
+/** `blog_posts` → `BlogPostsRecord`. */
+function interfaceName(collection: string) {
+	const pascal = collection
+		.split('_')
+		.filter(Boolean)
+		.map((part) => part[0].toUpperCase() + part.slice(1))
+		.join('');
+
+	return `${pascal}Record`;
+}
+
+/** The TypeScript type of a field's value as the API returns it: the value stored in the column. */
+function valueType(field: Field, collectionNames: Map<string, string>) {
+	const target = field.options.collectionId
+		? collectionNames.get(field.options.collectionId)
+		: undefined;
+	const items = field.options.values ?? [];
+
+	switch (field.type) {
+		case 'id':
+			return idGenerator(field.options) === 'autoincrement'
+				? { type: 'number', note: 'Unique id of the record.' }
+				: { type: 'string', note: 'Unique id of the record.' };
+		case 'created':
+			return {
+				type: 'number',
+				note: 'When the record was created, in milliseconds since 1970 (UTC).'
+			};
+		case 'updated':
+			return {
+				type: 'number',
+				note: 'When the record was last saved, in milliseconds since 1970 (UTC).'
+			};
+		case 'rich_text':
+			return { type: 'string', note: field.options.format === 'markdown' ? 'Markdown.' : 'HTML.' };
+		case 'date':
+			return { type: 'string', note: 'ISO 8601 date and time in UTC.' };
+		case 'number':
+		case 'integer':
+			return { type: 'number' };
+		case 'boolean':
+			return { type: '0 | 1', note: '1 for true, 0 for false.' };
+		case 'json':
+			return { type: 'string', note: 'JSON text; use `JSON.parse` to read it.' };
+		case 'list':
+			if (field.options.multiple) {
+				return { type: 'string', note: 'JSON array of the selected items.' };
+			}
+
+			return {
+				type: items.length > 0 ? items.map((item) => JSON.stringify(item)).join(' | ') : 'string',
+				note: 'The selected item.'
+			};
+		case 'relation':
+			return field.options.multiple
+				? { type: 'string', note: `JSON array of ids of records in \`${target ?? '?'}\`.` }
+				: { type: 'string', note: `Id of a record in \`${target ?? '?'}\`.` };
+		case 'file':
+			return field.options.multiple
+				? { type: 'string', note: 'JSON array of ids of records in `files`.' }
+				: { type: 'string', note: 'Id of a record in `files`.' };
+		case 'computed':
+			return { type: 'string', note: 'Calculated when the record is saved.' };
+		case 'blob':
+			return { type: 'unknown', note: 'Binary data.' };
+		default:
+			return { type: 'string' };
+	}
+}
+
+/**
+ * TypeScript declarations for every collection: one `<Name>Record` interface per collection and a
+ * `Collections` interface that maps collection names to them, for `new Pouchbase<Collections>()` in
+ * the SDK. Values are typed as they are stored: booleans are `0 | 1`, JSON and multiple relations
+ * are JSON text. Fields that are required or filled in by Pouchbase are not nullable.
+ */
+function declarations(appName: string, list: Collection[], all: Field[]) {
+	const collectionNames = new Map(list.map((collection) => [collection.id, collection.name]));
+	const used = new Set<string>();
+	const names = list.map((collection) => {
+		const base = interfaceName(collection.name);
+		let name = base;
+
+		for (let suffix = 2; used.has(name); suffix++) {
+			name = `${base.slice(0, -'Record'.length)}${suffix}Record`;
+		}
+
+		used.add(name);
+
+		return name;
+	});
+
+	const interfaces = list.map((collection, index) => {
+		const members = all
+			.filter((field) => field.collectionId === collection.id)
+			.flatMap((field) => {
+				const value = valueType(field, collectionNames);
+				const filled = field.type === 'id' || field.type === 'created' || field.type === 'updated';
+				const nullable = !filled && !field.required;
+				const doc = [
+					`\`${field.name}\` · ${FIELD_TYPES[field.type].label}${field.required ? ', required' : ''}.`,
+					value.note
+				]
+					.filter(Boolean)
+					.join(' ');
+
+				return [
+					`\t/** ${doc} */`,
+					`\t${field.name}: ${value.type}${nullable && value.type !== 'unknown' ? ' | null' : ''};`
+				];
+			});
+
+		return [
+			`/** A record of \`${collection.name}\`. */`,
+			`export interface ${names[index]} {`,
+			...members,
+			'}'
+		].join('\n');
+	});
+
+	const map = [
+		'/** Every collection, by name. Pass it to the SDK: `new Pouchbase<Collections>(url)`. */',
+		'export interface Collections {',
+		...list.map((collection, index) => `\t${collection.name}: ${names[index]};`),
+		'}'
+	].join('\n');
+
+	return (
+		[
+			[
+				'/**',
+				` * Types of the collections of ${appName.replace(/\*\//g, '* /')}, generated by Pouchbase.`,
+				' * Generate them again after changing a collection; edits to this file are overwritten.',
+				' */'
+			].join('\n'),
+			...interfaces,
+			map
+		].join('\n\n') + '\n'
+	);
+}
+
+export class TypesService extends Service {
+	/** TypeScript declarations of every collection and its fields. */
+	generate(): ResultAsync<
+		string,
+		| ServiceError<5000, 'GET_SETTING_FAILED'>
+		| ServiceError<17000, 'LIST_COLLECTIONS_FAILED'>
+		| ServiceError<17001, 'LIST_FIELDS_FAILED'>
+	> {
+		return this.services
+			.settings()
+			.get('app_name')
+			.andThen((appName) =>
+				fromPromise(this.db.select().from(collections).orderBy(asc(collections.name)), (error) =>
+					this.error(17000, 'LIST_COLLECTIONS_FAILED', error)
+				).andThen((list) =>
+					// One query for the fields of every collection, instead of one per collection.
+					fromPromise(
+						this.db.select().from(fields).orderBy(asc(fields.position), asc(fields.createdAt)),
+						(error) => this.error(17001, 'LIST_FIELDS_FAILED', error)
+					).map((all) => declarations(appName ?? 'Pouchbase', list, all))
+				)
+			);
+	}
+
+	/** The secret that `GET /api/types` asks for; created the first time it is needed. */
+	token(): ResultAsync<
+		string,
+		ServiceError<5000, 'GET_SETTING_FAILED'> | ServiceError<5001, 'SET_SETTING_FAILED'>
+	> {
+		return this.services
+			.settings()
+			.get('types_token')
+			.andThen((token) => (token ? okAsync(token) : this.regenerateToken()));
+	}
+
+	/** Replaces the token, so URLs with the old one stop working. */
+	regenerateToken(): ResultAsync<string, ServiceError<5001, 'SET_SETTING_FAILED'>> {
+		const token = generateToken();
+
+		return this.services
+			.settings()
+			.set('types_token', token)
+			.map(() => token);
+	}
+
+	/** Whether `token` is the current token. There is none until an admin opens the types page. */
+	verifyToken(
+		token: string
+	): ResultAsync<
+		boolean,
+		ServiceError<5000, 'GET_SETTING_FAILED'> | ServiceError<17002, 'VERIFY_TOKEN_FAILED'>
+	> {
+		return this.services
+			.settings()
+			.get('types_token')
+			.andThen((current) => {
+				if (!current) {
+					return okAsync(false);
+				}
+
+				// Compares hashes, so the time it takes says nothing about the token.
+				return fromPromise(Promise.all([hashToken(token), hashToken(current)]), (error) =>
+					this.error(17002, 'VERIFY_TOKEN_FAILED', error)
+				).map(([given, expected]) => given === expected);
+			});
+	}
+}

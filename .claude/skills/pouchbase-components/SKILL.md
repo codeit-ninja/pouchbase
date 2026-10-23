@@ -161,7 +161,8 @@ setStepsContext({
 - Neutral palette is `zinc`; errors use `red`. Keep focus states visible (`focus-visible:`).
 - **Control height:** buttons, inputs and every other form control use `h-control` (theme token
   `--spacing-control` in `src/routes/layout.css`), never a hard-coded `h-10`, so they always line
-  up. Every control has a border (`border-transparent` when it shouldn't be visible) so the box
+  up (32px). Rows in lists and tables (data grid cells and heads, navigation links) use `h-row`
+  (`--spacing-row`, 40px) instead. Every control has a border (`border-transparent` when it shouldn't be visible) so the box
   model is identical.
 - **Pointer cursor:** every clickable element shows `cursor: pointer`. The base layer in
   `layout.css` covers native elements (`button`, `a[href]`, `[role='button']`, `label[for]`,

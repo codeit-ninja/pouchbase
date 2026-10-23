@@ -25,6 +25,7 @@
 
 	<Form.Root
 		form={deleteRecords}
+		success={ids.length === 1 ? 'Record deleted' : `${ids.length} records deleted`}
 		enhance={async (instance) => {
 			if (await instance.submit()) {
 				close(true);

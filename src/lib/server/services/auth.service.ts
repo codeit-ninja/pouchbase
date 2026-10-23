@@ -1,7 +1,9 @@
 import type { ErrorOf, ServiceError } from './base.service';
 import type { CollectionsService } from './collections.service';
 import type { DatabaseService } from './database.service';
+import type { FilesService } from './files.service';
 import type { CreateFieldInput, FieldsService } from './fields.service';
+import type { MailService } from './mail.service';
 import type { OAuthProvider } from '#lib/auth/oauth-providers.js';
 import type { ResultAsync } from 'neverthrow';
 
@@ -16,9 +18,10 @@ import {
 	type PasswordSignUpInput
 } from '#lib/schemas/password-auth.js';
 
-import { queryDatabase, queryObjects } from '../cloudflare/d1';
+import { batchDatabase, queryDatabase, queryObjects } from '../db/query';
 import { generateRecordId, generateToken, hashPassword, verifyPassword } from '../crypto';
-import { collections, fields, oauthRequests } from '../db';
+import { fields, oauthRequests } from '../db';
+import { passwordResetEmail, verificationEmail } from '../mail/templates';
 import { authorizationUrl, exchangeCode, randomToken } from '../oauth';
 import { Service } from './base.service';
 
@@ -26,25 +29,44 @@ import { Service } from './base.service';
 export { USERS_COLLECTION } from '#lib/auth/users.js';
 import { USERS_COLLECTION } from '#lib/auth/users.js';
 
-/** Fields every user has. They are system fields: they can't be renamed or deleted. */
-const AUTH_FIELDS: CreateFieldInput[] = [
-	{ name: 'email', type: 'email', required: false, unique: true, options: {} },
-	{ name: 'username', type: 'text', required: false, unique: true, options: {} },
-	{ name: 'name', type: 'text', required: false, unique: false, options: {} },
-	{ name: 'avatar_url', type: 'url', required: false, unique: false, options: {} },
-	{
-		name: 'verified',
-		type: 'boolean',
-		required: false,
-		unique: false,
-		defaultValue: 'false',
-		options: {}
-	}
-];
+/**
+ * Fields every user has. They are system fields: they can't be renamed or deleted.
+ * `avatar` is a file field: an image in the built-in `files` collection.
+ */
+function authFields(): CreateFieldInput[] {
+	return [
+		{ name: 'email', type: 'email', required: false, unique: true, options: {} },
+		{ name: 'username', type: 'text', required: false, unique: true, options: {} },
+		{ name: 'name', type: 'text', required: false, unique: false, options: {} },
+		{
+			name: 'avatar',
+			type: 'file',
+			required: false,
+			unique: false,
+			options: { accept: ['image/*'] }
+		},
+		{
+			name: 'verified',
+			type: 'boolean',
+			required: false,
+			unique: false,
+			defaultValue: 'false',
+			options: {}
+		}
+	];
+}
+
+/** Auth fields of earlier versions that have been replaced. */
+const OUTDATED_AUTH_FIELDS = ['avatar_url'];
 
 const TOKEN_ISSUER = 'pouchbase';
 const TOKEN_AUDIENCE = USERS_COLLECTION;
 const TOKEN_LIFETIME = '7d';
+const RESET_TOKEN_LIFETIME = '30m';
+const VERIFICATION_TOKEN_LIFETIME = '3d';
+
+/** What an email link is for; part of the token's audience. */
+type TokenPurpose = 'password_reset' | 'verification';
 
 // Once ensured, the users collection stays; cache it per isolate.
 let usersReady = false;
@@ -74,10 +96,9 @@ export type AuthIssues = Record<string, string>;
 type InvalidInputError = ServiceError<11025, 'INVALID_INPUT'> & { data: { issues: AuthIssues } };
 
 type EnsureUsersError =
-	| ErrorOf<ReturnType<CollectionsService['getByName']>>
-	| ErrorOf<ReturnType<CollectionsService['create']>>
-	| ErrorOf<ReturnType<FieldsService['list']>>
-	| ErrorOf<ReturnType<FieldsService['create']>>
+	| ErrorOf<ReturnType<FilesService['ensureFilesCollection']>>
+	| ErrorOf<ReturnType<CollectionsService['ensureSystem']>>
+	| ErrorOf<ReturnType<FieldsService['delete']>>
 	| ErrorOf<ReturnType<DatabaseService['requireApp']>>
 	| ServiceError<11000, 'AUTH_SETUP_FAILED'>;
 
@@ -107,51 +128,48 @@ export class AuthService extends Service {
 			return okAsync(undefined);
 		}
 
-		const collectionsService = this.services.collections();
-
-		return collectionsService
-			.getByName(USERS_COLLECTION)
-			.andThen((existing) =>
-				existing ? okAsync(existing) : collectionsService.create(USERS_COLLECTION)
+		return this.services
+			.files()
+			.ensureFilesCollection()
+			.andThen((filesCollection) =>
+				this.services
+					.collections()
+					.ensureSystem(USERS_COLLECTION, authFields())
+					.map((collection) => ({ collection, filesCollection }))
 			)
-			.andThen((collection) =>
-				collection.system
-					? okAsync(collection)
-					: fromPromise(
-							this.db
-								.update(collections)
-								.set({ system: true })
-								.where(eq(collections.id, collection.id)),
-							(error) => this.error(11000, 'AUTH_SETUP_FAILED', error)
-						).map(() => collection)
-			)
-			.andThen((collection) =>
+			.andThen(({ collection, filesCollection }) =>
 				this.services
 					.fields()
 					.list(collection.id)
 					.andThen((existing) => {
 						let chain: ResultAsync<void, EnsureUsersError> = okAsync(undefined);
 
-						for (const field of AUTH_FIELDS) {
-							const current = existing.find((candidate) => candidate.name === field.name);
+						for (const field of existing.filter((candidate) =>
+							OUTDATED_AUTH_FIELDS.includes(candidate.name)
+						)) {
+							chain = chain.andThen(() =>
+								this.services.fields().delete(USERS_COLLECTION, field.name, { allowSystem: true })
+							);
+						}
 
-							chain = chain.andThen((): ResultAsync<void, EnsureUsersError> => {
-								if (!current) {
-									return this.services
-										.fields()
-										.create(USERS_COLLECTION, { ...field, system: true })
-										.map(() => undefined);
-								}
+						// Earlier versions stored the avatar as a relation to `files`, then as a file field
+						// with `accept: 'images'`. All hold one file id in a TEXT column, so only the field
+						// definition changes.
+						const avatar = existing.find((candidate) => candidate.name === 'avatar');
 
-								if (current.system) {
-									return okAsync(undefined);
-								}
-
-								return fromPromise(
-									this.db.update(fields).set({ system: true }).where(eq(fields.id, current.id)),
+						if (avatar && (avatar.type === 'relation' || !Array.isArray(avatar.options.accept))) {
+							chain = chain.andThen(() =>
+								fromPromise(
+									this.db
+										.update(fields)
+										.set({
+											type: 'file',
+											options: { collectionId: filesCollection.id, accept: ['image/*'] }
+										})
+										.where(eq(fields.id, avatar.id)),
 									(error) => this.error(11000, 'AUTH_SETUP_FAILED', error)
-								).map(() => undefined);
-							});
+								).map(() => undefined)
+							);
 						}
 
 						return chain;
@@ -162,25 +180,22 @@ export class AuthService extends Service {
 				fromPromise(
 					(async () => {
 						// Not a collection: an internal table, so it's prefixed with `_` (collection
-						// names can't start with one).
-						await queryDatabase(
-							appDatabase.id,
-							`CREATE TABLE IF NOT EXISTS "_external_auths" ("id" TEXT PRIMARY KEY NOT NULL, "user_id" TEXT NOT NULL, "provider" TEXT NOT NULL, "provider_id" TEXT NOT NULL, "created_at" INTEGER NOT NULL)`
-						);
-						await queryDatabase(
-							appDatabase.id,
-							`CREATE UNIQUE INDEX IF NOT EXISTS "_external_auths_provider" ON "_external_auths" ("provider", "provider_id")`
-						);
-						await queryDatabase(
-							appDatabase.id,
-							`CREATE INDEX IF NOT EXISTS "_external_auths_user" ON "_external_auths" ("user_id")`
-						);
-						// Password hashes live outside the users table, so they never show up in the
-						// grid or the API.
-						await queryDatabase(
-							appDatabase.id,
-							`CREATE TABLE IF NOT EXISTS "_passwords" ("user_id" TEXT PRIMARY KEY NOT NULL, "hash" TEXT NOT NULL, "updated_at" INTEGER NOT NULL)`
-						);
+						// names can't start with one). Password hashes live outside the users table, so
+						// they never show up in the grid or the API. One round-trip for all statements.
+						await batchDatabase(appDatabase.id, [
+							{
+								sql: `CREATE TABLE IF NOT EXISTS "_external_auths" ("id" TEXT PRIMARY KEY NOT NULL, "user_id" TEXT NOT NULL, "provider" TEXT NOT NULL, "provider_id" TEXT NOT NULL, "created_at" INTEGER NOT NULL)`
+							},
+							{
+								sql: `CREATE UNIQUE INDEX IF NOT EXISTS "_external_auths_provider" ON "_external_auths" ("provider", "provider_id")`
+							},
+							{
+								sql: `CREATE INDEX IF NOT EXISTS "_external_auths_user" ON "_external_auths" ("user_id")`
+							},
+							{
+								sql: `CREATE TABLE IF NOT EXISTS "_passwords" ("user_id" TEXT PRIMARY KEY NOT NULL, "hash" TEXT NOT NULL, "updated_at" INTEGER NOT NULL)`
+							}
+						]);
 					})(),
 					(error) => this.error(11000, 'AUTH_SETUP_FAILED', error)
 				)
@@ -305,13 +320,18 @@ export class AuthService extends Service {
 					);
 				}
 
-				return this.signToken(result.userId).map((token) => ({ token, userId: result.userId }));
+				return this.refreshComputed(result.userId).andThen(() =>
+					this.signToken(result.userId).map((token) => ({ token, userId: result.userId }))
+				);
 			});
 	}
 
-	/** Checks a username and password, and returns a token. */
+	/**
+	 * Checks a username or email (when the identity contains an `@`) and password, and returns a
+	 * token.
+	 */
 	passwordSignIn(
-		username: string,
+		identity: string,
 		password: string
 	): ResultAsync<
 		{ token: string; userId: string },
@@ -332,14 +352,16 @@ export class AuthService extends Service {
 			.andThen((appDatabase) =>
 				fromPromise(
 					(async () => {
+						const normalized = identity.trim().toLowerCase();
+						const column = normalized.includes('@') ? 'email' : 'username';
 						const [row] = await queryDatabase(
 							appDatabase.id,
-							`SELECT "users"."id", "_passwords"."hash" FROM "users" JOIN "_passwords" ON "_passwords"."user_id" = "users"."id" WHERE lower("users"."username") = ?`,
-							[username.trim().toLowerCase()]
+							`SELECT "users"."id", "_passwords"."hash" FROM "users" JOIN "_passwords" ON "_passwords"."user_id" = "users"."id" WHERE lower("users"."${column}") = ?`,
+							[normalized]
 						);
 
 						if (!row) {
-							// Hash anyway, so unknown usernames take as long as wrong passwords.
+							// Hash anyway, so unknown users take as long as wrong passwords.
 							await hashPassword(password);
 							return null;
 						}
@@ -635,22 +657,16 @@ export class AuthService extends Service {
 									}
 								}
 
+								const created = !userId;
+
 								if (!userId) {
 									userId = generateRecordId();
 									const now = Date.now();
 
 									await queryDatabase(
 										databaseId,
-										`INSERT INTO "users" ("id", "created_at", "updated_at", "email", "name", "avatar_url", "verified") VALUES (?, ?, ?, ?, ?, ?, ?)`,
-										[
-											userId,
-											now,
-											now,
-											email,
-											profile.name,
-											profile.avatarUrl,
-											profile.emailVerified ? 1 : 0
-										]
+										`INSERT INTO "users" ("id", "created_at", "updated_at", "email", "name", "verified") VALUES (?, ?, ?, ?, ?, ?)`,
+										[userId, now, now, email, profile.name, profile.emailVerified ? 1 : 0]
 									);
 								}
 
@@ -660,7 +676,7 @@ export class AuthService extends Service {
 									[generateRecordId(), userId, provider, profile.id, Date.now()]
 								);
 
-								return { userId };
+								return { userId, created, avatarUrl: profile.avatarUrl };
 							})(),
 							(error) => this.error(11004, 'SIGN_IN_FAILED', error)
 						)
@@ -669,7 +685,245 @@ export class AuthService extends Service {
 			.andThen((result) =>
 				'conflict' in result
 					? errAsync(this.error(11005, 'EMAIL_IN_USE'))
-					: this.signToken(result.userId).map((token) => ({ token, userId: result.userId }))
+					: (result.created
+							? this.refreshComputed(result.userId).andThen(() =>
+									result.avatarUrl
+										? this.importAvatar(result.userId, result.avatarUrl)
+										: okAsync(undefined)
+								)
+							: okAsync(undefined)
+						).andThen(() =>
+							this.signToken(result.userId).map((token) => ({ token, userId: result.userId }))
+						)
+			);
+	}
+
+	/**
+	 * Emails a link to choose a new password to the user with this email address. Nothing happens
+	 * when there is no such user, so the API doesn't reveal which addresses have an account.
+	 */
+	requestPasswordReset(
+		email: string
+	): ResultAsync<
+		void,
+		| ServiceError<1004, 'APP_DATABASE_MISSING'>
+		| ServiceError<5000, 'GET_SETTING_FAILED'>
+		| ServiceError<5001, 'SET_SETTING_FAILED'>
+		| ErrorOf<ReturnType<MailService['send']>>
+		| ServiceError<11020, 'PASSWORD_AUTH_DISABLED'>
+		| ServiceError<11027, 'MAIL_DISABLED'>
+		| ServiceError<11030, 'PASSWORD_RESET_FAILED'>
+	> {
+		return this.passwordSettings()
+			.andThen((settings) =>
+				settings.enabled
+					? this.requireMail()
+					: errAsync(this.error(11020, 'PASSWORD_AUTH_DISABLED'))
+			)
+			.andThen(() => this.services.database().requireApp())
+			.andThen((appDatabase) =>
+				fromPromise(
+					(async () => {
+						const [row] = await queryDatabase(
+							appDatabase.id,
+							`SELECT "users"."id", "users"."email", "_passwords"."updated_at" FROM "users" LEFT JOIN "_passwords" ON "_passwords"."user_id" = "users"."id" WHERE "users"."email" = ?`,
+							[email.trim().toLowerCase()]
+						);
+
+						return row
+							? { userId: String(row[0]), email: String(row[1]), passwordAt: Number(row[2] ?? 0) }
+							: null;
+					})(),
+					(error) => this.error(11030, 'PASSWORD_RESET_FAILED', error)
+				)
+			)
+			.andThen((user) => {
+				if (!user) {
+					return okAsync(undefined);
+				}
+
+				// The token carries the moment the password last changed, so it works once.
+				return this.signPurposeToken(user.userId, 'password_reset', RESET_TOKEN_LIFETIME, {
+					email: user.email,
+					pwd: user.passwordAt
+				})
+					.mapErr((error) => this.error(11030, 'PASSWORD_RESET_FAILED', error))
+					.andThen((token) =>
+						this.appName().andThen((appName) =>
+							this.services
+								.mail()
+								.send(
+									user.email,
+									passwordResetEmail(appName, this.accountUrl('/account/reset-password', token))
+								)
+						)
+					);
+			});
+	}
+
+	/** Sets a new password with the token from the reset email. */
+	confirmPasswordReset(
+		token: string,
+		password: string
+	): ResultAsync<
+		void,
+		| ServiceError<1004, 'APP_DATABASE_MISSING'>
+		| ServiceError<5000, 'GET_SETTING_FAILED'>
+		| ServiceError<5001, 'SET_SETTING_FAILED'>
+		| InvalidInputError
+		| ServiceError<11028, 'INVALID_RESET_TOKEN'>
+		| ServiceError<11030, 'PASSWORD_RESET_FAILED'>
+	> {
+		const parsed = appPassword.safeParse(password);
+
+		if (!parsed.success) {
+			return errAsync(
+				this.invalidInput(parsed.error.issues.map((issue) => ({ ...issue, path: ['password'] })))
+			);
+		}
+
+		return this.verifyPurposeToken(token, 'password_reset')
+			.mapErr(() => this.error(11028, 'INVALID_RESET_TOKEN'))
+			.andThen((claims) =>
+				this.services
+					.database()
+					.requireApp()
+					.andThen((appDatabase) =>
+						fromPromise(
+							(async () => {
+								const [row] = await queryDatabase(
+									appDatabase.id,
+									`SELECT "users"."email", "_passwords"."updated_at" FROM "users" LEFT JOIN "_passwords" ON "_passwords"."user_id" = "users"."id" WHERE "users"."id" = ?`,
+									[claims.sub]
+								);
+
+								if (!row || String(row[0]) !== claims.email || Number(row[1] ?? 0) !== claims.pwd) {
+									return false;
+								}
+
+								const now = Date.now();
+
+								// Following the link proves the address, so the user is verified too.
+								await batchDatabase(appDatabase.id, [
+									{
+										sql: `INSERT INTO "_passwords" ("user_id", "hash", "updated_at") VALUES (?, ?, ?) ON CONFLICT ("user_id") DO UPDATE SET "hash" = excluded."hash", "updated_at" = excluded."updated_at"`,
+										params: [claims.sub, await hashPassword(parsed.data), now]
+									},
+									{
+										sql: `UPDATE "users" SET "verified" = 1, "updated_at" = ? WHERE "id" = ? AND "verified" = 0`,
+										params: [now, claims.sub]
+									}
+								]);
+
+								return true;
+							})(),
+							(error) => this.error(11030, 'PASSWORD_RESET_FAILED', error)
+						)
+					)
+			)
+			.andThen((done) =>
+				done ? okAsync(undefined) : errAsync(this.error(11028, 'INVALID_RESET_TOKEN'))
+			);
+	}
+
+	/**
+	 * Emails a link to verify the address to the user with this email address. Nothing happens when
+	 * there is no such user or the user is verified already.
+	 */
+	requestVerification(
+		email: string
+	): ResultAsync<
+		void,
+		| ServiceError<1004, 'APP_DATABASE_MISSING'>
+		| ServiceError<5000, 'GET_SETTING_FAILED'>
+		| ServiceError<5001, 'SET_SETTING_FAILED'>
+		| ErrorOf<ReturnType<MailService['send']>>
+		| ServiceError<11027, 'MAIL_DISABLED'>
+		| ServiceError<11031, 'VERIFICATION_FAILED'>
+	> {
+		return this.requireMail()
+			.andThen(() => this.services.database().requireApp())
+			.andThen((appDatabase) =>
+				fromPromise(
+					queryDatabase(
+						appDatabase.id,
+						`SELECT "id", "email" FROM "users" WHERE "email" = ? AND "verified" = 0`,
+						[email.trim().toLowerCase()]
+					),
+					(error) => this.error(11031, 'VERIFICATION_FAILED', error)
+				)
+			)
+			.andThen(([row]) => {
+				if (!row) {
+					return okAsync(undefined);
+				}
+
+				const address = String(row[1]);
+
+				return this.signPurposeToken(String(row[0]), 'verification', VERIFICATION_TOKEN_LIFETIME, {
+					email: address
+				})
+					.mapErr((error) => this.error(11031, 'VERIFICATION_FAILED', error))
+					.andThen((token) =>
+						this.appName().andThen((appName) =>
+							this.services
+								.mail()
+								.send(
+									address,
+									verificationEmail(appName, this.accountUrl('/account/verify-email', token))
+								)
+						)
+					);
+			});
+	}
+
+	/** Marks the user as verified with the token from the verification email. */
+	confirmVerification(
+		token: string
+	): ResultAsync<
+		void,
+		| ServiceError<1004, 'APP_DATABASE_MISSING'>
+		| ServiceError<5000, 'GET_SETTING_FAILED'>
+		| ServiceError<5001, 'SET_SETTING_FAILED'>
+		| ServiceError<11029, 'INVALID_VERIFICATION_TOKEN'>
+		| ServiceError<11031, 'VERIFICATION_FAILED'>
+	> {
+		return this.verifyPurposeToken(token, 'verification')
+			.mapErr(() => this.error(11029, 'INVALID_VERIFICATION_TOKEN'))
+			.andThen((claims) =>
+				this.services
+					.database()
+					.requireApp()
+					.andThen((appDatabase) =>
+						fromPromise(
+							(async () => {
+								// Only while the user still has the address the link was sent to.
+								const [row] = await queryDatabase(
+									appDatabase.id,
+									`SELECT "verified" FROM "users" WHERE "id" = ? AND "email" = ?`,
+									[claims.sub, claims.email]
+								);
+
+								if (!row) {
+									return false;
+								}
+
+								if (!Number(row[0])) {
+									await queryDatabase(
+										appDatabase.id,
+										`UPDATE "users" SET "verified" = 1, "updated_at" = ? WHERE "id" = ?`,
+										[Date.now(), claims.sub]
+									);
+								}
+
+								return true;
+							})(),
+							(error) => this.error(11031, 'VERIFICATION_FAILED', error)
+						)
+					)
+			)
+			.andThen((done) =>
+				done ? okAsync(undefined) : errAsync(this.error(11029, 'INVALID_VERIFICATION_TOKEN'))
 			);
 	}
 
@@ -730,6 +984,45 @@ export class AuthService extends Service {
 		};
 	}
 
+	/**
+	 * Fills the computed fields of a user created by a sign-up, which inserts the row directly.
+	 * Best effort: a sign-up never fails because of a computed field.
+	 */
+	private refreshComputed(userId: string): ResultAsync<void, never> {
+		return this.services
+			.records()
+			.refreshComputed(USERS_COLLECTION, [userId])
+			.orElse(() => okAsync(undefined));
+	}
+
+	/**
+	 * Stores the provider's profile picture in `files` and links it as the user's avatar.
+	 * Best effort: a sign-in never fails because of its avatar.
+	 */
+	private importAvatar(userId: string, url: string): ResultAsync<void, never> {
+		return this.services
+			.files()
+			.importImage(url, `avatar-${userId}`)
+			.andThen((file) =>
+				file
+					? this.services
+							.database()
+							.requireApp()
+							.andThen((appDatabase) =>
+								fromPromise(
+									queryDatabase(appDatabase.id, `UPDATE "users" SET "avatar" = ? WHERE "id" = ?`, [
+										file.id,
+										userId
+									]),
+									(error) => this.error(11004, 'SIGN_IN_FAILED', error)
+								)
+							)
+							.map(() => undefined)
+					: okAsync(undefined)
+			)
+			.orElse(() => okAsync(undefined));
+	}
+
 	/** A sign-in that hasn't expired yet; `null` otherwise. */
 	private findRequest(
 		where: SQL
@@ -778,6 +1071,77 @@ export class AuthService extends Service {
 				(error) => this.error(11004, 'SIGN_IN_FAILED', error)
 			)
 		);
+	}
+
+	/**
+	 * A token for one purpose (an email link). Its audience differs from sign-in tokens, so it can
+	 * never be used as one, nor for the other purpose.
+	 */
+	private signPurposeToken(
+		userId: string,
+		purpose: TokenPurpose,
+		lifetime: string,
+		claims: { email: string; pwd?: number }
+	) {
+		return this.tokenKey().andThen((key) =>
+			fromPromise(
+				new SignJWT(claims)
+					.setProtectedHeader({ alg: 'HS256' })
+					.setSubject(userId)
+					.setIssuer(TOKEN_ISSUER)
+					.setAudience(`${TOKEN_AUDIENCE}:${purpose}`)
+					.setIssuedAt()
+					.setExpirationTime(lifetime)
+					.sign(key),
+				(error) => this.error(11004, 'SIGN_IN_FAILED', error)
+			)
+		);
+	}
+
+	private verifyPurposeToken(token: string, purpose: TokenPurpose) {
+		return this.tokenKey()
+			.andThen((key) =>
+				fromPromise(
+					jwtVerify(token, key, {
+						issuer: TOKEN_ISSUER,
+						audience: `${TOKEN_AUDIENCE}:${purpose}`
+					}),
+					(error) => this.error(11006, 'INVALID_TOKEN', error)
+				)
+			)
+			.andThen(({ payload }) =>
+				payload.sub && typeof payload.email === 'string'
+					? okAsync({
+							sub: payload.sub,
+							email: payload.email,
+							pwd: typeof payload.pwd === 'number' ? payload.pwd : 0
+						})
+					: errAsync(this.error(11006, 'INVALID_TOKEN'))
+			);
+	}
+
+	/** Flows that send mail need mail settings. */
+	private requireMail() {
+		return this.services
+			.mail()
+			.enabled()
+			.andThen((enabled) =>
+				enabled ? okAsync(undefined) : errAsync(this.error(11027, 'MAIL_DISABLED'))
+			);
+	}
+
+	private appName() {
+		return this.services
+			.settings()
+			.get('app_name')
+			.map((name) => name ?? 'Pouchbase');
+	}
+
+	/** Link to a page of this deployment that handles an email link. */
+	private accountUrl(path: string, token: string) {
+		const url = new URL(path, this.ctx.url.origin);
+		url.searchParams.set('token', token);
+		return url.toString();
 	}
 
 	/** Signing key for user tokens; generated on first use and stored in the settings. */

@@ -31,8 +31,31 @@ Before writing or editing any `.svelte` file, load the **`pouchbase-components`*
 Before writing server-side code (`src/lib/server`, `*.remote.ts`, hooks, `+page.server.ts`, `+server.ts`), load the **`pouchbase-services`** skill (`.claude/skills/pouchbase-services/SKILL.md`). In short:
 
 - Business logic lives in `src/lib/server/services/<domain>.service.ts` as `class XService extends Service`, registered in `services.ts` and reached via `locals.services.x()`.
-- Every public method returns a neverthrow `ResultAsync<T, ServiceError<Code, 'MESSAGE'>>`; error codes are unique per service range (1000 database, 2000 install, 3000 users, 4000 sessions, 5000 settings, 6000 collections, 7000 fields, 8000 records, 9000 indexes, 10000 OAuth providers, 11000 auth); the full table is in the skill.
+- Every public method returns a neverthrow `ResultAsync<T, ServiceError<Code, 'MESSAGE'>>`; error codes are unique per service range (1000 database, 2000 install, 3000 users, 4000 sessions, 5000 settings, 6000 collections, 7000 fields, 8000 records, 9000 indexes, 10000 OAuth providers, 11000 auth, 12000 storage, 13000 files, 14000 cloudflare, 15000 mail, 16000 backups, 17000 types, 18000 functions, 19000 plugins); the full table is in the skill.
 - Callers check `result.isErr()` and map errors to `invalid()` / `error()` themselves; "not found" is `Ok(null)`.
+
+## Public API and SDK
+
+The TypeScript SDK lives next to this repo in `../pouchbase-js-sdk` (an extra working directory in `.claude/settings.json`) and wraps the public API in `src/routes/api/`. When you add or change an endpoint there (path, body, response or status codes), update the SDK and its `AGENTS.md` API table to match, or say that it still needs to happen.
+
+## Plugin contract
+
+The plugin contract lives in the workspace package `packages/plugin-sdk` (`@pouchbasejs/plugin-sdk`, MIT): the manifest schema, the bundle format, the registry API, the server and UI types, and the `pouchbase-plugin` CLI. The app imports the same package to validate installs, so the contract and the host change together. Its README documents the contract.
+
+- `API_VERSION` covers all of it. Within an API version, changes are additive only (new optional manifest fields, contribution kinds or context members); anything that breaks an existing plugin bumps `API_VERSION` and keeps the previous version in `SUPPORTED_API_VERSIONS`.
+- Contract changes get a changeset for `@pouchbasejs/plugin-sdk` as well as for `pouchbase` when the app changes.
+- Plugins may use any license under `PLUGIN-EXCEPTION.md`; keep the SDK free of AGPL code.
+- Run the SDK checks with `pnpm --filter @pouchbasejs/plugin-sdk check` and `... test`.
+
+## Changesets
+
+Versioning and the changelog are managed with [Changesets](https://changesets.dev) (`.changeset/`, see its README).
+
+- Every new feature, bug fix or breaking change gets a changeset: run `pnpm changeset` or add a Markdown file to `.changeset/` by hand, with frontmatter `'pouchbase': patch | minor | major` and a one-line, user-facing description in English.
+- Create the changeset in the same change as the code, as part of the work, not afterwards.
+- Do **not** create a separate changeset when the change belongs to work that already has an unreleased changeset in `.changeset/` (e.g. fixing a bug in a feature that is still pending): update that changeset's description if it no longer covers the change.
+- Bump types: `patch` for bug fixes and small improvements, `minor` for new features, `major` for breaking changes. Internal refactors, docs and tooling changes need no changeset.
+- Never run `pnpm changeset:version` unless asked; the Release workflow does it in the Version Packages pull request, and merging that pull request releases the version.
 
 ---
 

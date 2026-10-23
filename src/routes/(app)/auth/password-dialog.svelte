@@ -30,6 +30,7 @@
 
 	<Form.Root
 		{form}
+		success="Username & password settings saved"
 		enhance={async (instance) => {
 			if (await instance.submit()) {
 				close();

@@ -64,6 +64,26 @@
 			purpose: 'Sign in: { username, password }'
 		},
 		{
+			method: 'POST',
+			path: '/api/auth/password/request-reset',
+			purpose: 'Email a link to choose a new password: { email }'
+		},
+		{
+			method: 'POST',
+			path: '/api/auth/password/confirm-reset',
+			purpose: 'Set the new password: { token, password }'
+		},
+		{
+			method: 'POST',
+			path: '/api/auth/verification/request',
+			purpose: 'Email a link to verify the address: { email }'
+		},
+		{
+			method: 'POST',
+			path: '/api/auth/verification/confirm',
+			purpose: 'Verify the address: { token }'
+		},
+		{
 			method: 'GET',
 			path: '/api/auth/oauth2/<provider>?state=…&challenge=…',
 			purpose: 'Open in a popup to sign in with a provider'

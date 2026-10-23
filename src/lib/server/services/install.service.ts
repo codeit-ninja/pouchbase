@@ -64,7 +64,10 @@ export class InstallService extends Service {
 		| ServiceError<1003, 'APP_DATABASE_CREATE_FAILED'>
 		| ServiceError<2000, 'ACCOUNT_ALREADY_EXISTS'>
 		| ServiceError<3000, 'HAS_USERS_FAILED'>
+		| ServiceError<3001, 'FIND_USER_FAILED'>
 		| ServiceError<3002, 'CREATE_USER_FAILED'>
+		| ServiceError<3003, 'USERNAME_TAKEN'>
+		| ServiceError<3004, 'EMAIL_TAKEN'>
 		| ServiceError<4000, 'CREATE_SESSION_FAILED'>
 		| ServiceError<5000, 'GET_SETTING_FAILED'>
 		| ServiceError<5001, 'SET_SETTING_FAILED'>

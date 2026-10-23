@@ -24,7 +24,7 @@
 	</Dialog.Header>
 
 	<!-- The server redirects to the overview after deleting. -->
-	<Form.Root {form}>
+	<Form.Root {form} success="Collection deleted">
 		<Form.Hidden field={form.fields.name} value={collection.name} />
 
 		<Dialog.Footer>

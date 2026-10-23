@@ -9,6 +9,11 @@ export const listRecordsSchema = z.object({
 	order: z.enum(['asc', 'desc']).optional()
 });
 
+export const getRecordSchema = z.object({
+	collection: z.string(),
+	id: z.string()
+});
+
 export const deleteRecordsSchema = z.object({
 	/** Hidden fields. */
 	collection: z.string(),
@@ -30,4 +35,11 @@ export type SaveRecordInput = {
 	 * Leading underscore: never sent back to the browser.
 	 */
 	_password?: string;
+	/** Only for the built-in `files` collection: the uploaded file (required when creating). */
+	_file?: File;
+	/**
+	 * New files for relation fields that point to `files` (e.g. a user's `avatar`), keyed by field
+	 * name. Each upload is stored in `files` and replaces the field's selected file.
+	 */
+	_uploads?: Record<string, File>;
 };

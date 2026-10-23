@@ -18,6 +18,7 @@
 <script lang="ts">
 	import { Select } from 'bits-ui';
 	import * as Icon from '../../icon';
+	import * as ScrollArea from '../../scroll-area/index.js';
 
 	let {
 		items,
@@ -66,32 +67,38 @@
 			sideOffset={4}
 			class="z-50 max-h-(--bits-select-content-available-height) w-(--bits-select-anchor-width) min-w-48 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg outline-none"
 		>
-			<Select.Viewport class="p-1.5">
-				{#each items as item (item.value)}
-					<Select.Item
-						value={item.value}
-						label={item.label}
-						disabled={item.disabled}
-						class="flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-sm text-zinc-700 outline-none select-none data-disabled:cursor-not-allowed data-disabled:opacity-50 data-highlighted:bg-zinc-100 data-highlighted:text-zinc-900"
-					>
-						{#snippet children({ selected: isSelected })}
-							<span class="flex min-w-0 flex-1 flex-col">
-								<span class="truncate">{item.label}</span>
+			<!-- At most 18rem high, so long lists scroll instead of filling the screen. -->
+			<ScrollArea.Root
+				type="auto"
+				viewportClass="max-h-[min(18rem,calc(var(--bits-select-content-available-height)-2px))]"
+			>
+				<Select.Viewport class="p-1.5">
+					{#each items as item (item.value)}
+						<Select.Item
+							value={item.value}
+							label={item.label}
+							disabled={item.disabled}
+							class="flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-sm text-zinc-700 outline-none select-none data-disabled:cursor-not-allowed data-disabled:opacity-50 data-highlighted:bg-zinc-100 data-highlighted:text-zinc-900"
+						>
+							{#snippet children({ selected: isSelected })}
+								<span class="flex min-w-0 flex-1 flex-col">
+									<span class="truncate">{item.label}</span>
 
-								{#if item.description}
-									<span class="truncate text-xs text-zinc-500">{item.description}</span>
+									{#if item.description}
+										<span class="truncate text-xs text-zinc-500">{item.description}</span>
+									{/if}
+								</span>
+
+								{#if isSelected}
+									<Icon.Root icon="lucide:check" class="size-4 text-zinc-900" />
 								{/if}
-							</span>
-
-							{#if isSelected}
-								<Icon.Root icon="lucide:check" class="size-4 text-zinc-900" />
-							{/if}
-						{/snippet}
-					</Select.Item>
-				{:else}
-					<div class="px-3 py-2 text-sm text-zinc-500">No records</div>
-				{/each}
-			</Select.Viewport>
+							{/snippet}
+						</Select.Item>
+					{:else}
+						<div class="px-3 py-2 text-sm text-zinc-500">No records</div>
+					{/each}
+				</Select.Viewport>
+			</ScrollArea.Root>
 		</Select.Content>
 	</Select.Portal>
 </Select.Root>

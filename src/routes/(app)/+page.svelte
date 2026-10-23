@@ -6,40 +6,52 @@
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
 	import { getAppName } from '#lib/remote/settings.remote.js';
 	import { currentUser } from '../(auth)/auth.remote';
+	import { getCloudflareAvailable } from './cloudflare.remote';
+	import CloudflareOverview from './cloudflare-overview.svelte';
 	import { listCollections } from './collections.remote';
 
-	const [appName, user, collections] = $derived(
-		await Promise.all([getAppName(), currentUser(), listCollections()])
+	const [appName, user, collections, cloudflare] = $derived(
+		await Promise.all([getAppName(), currentUser(), listCollections(), getCloudflareAvailable()])
 	);
 </script>
 
 <svelte:head>
-	<title>{appName}</title>
+	<title>Dashboard · {appName}</title>
 </svelte:head>
 
 <Topbar.Root>
 	<Breadcrumb.Root>
 		<Breadcrumb.Item>
-			<Breadcrumb.Page>Collections</Breadcrumb.Page>
+			<Breadcrumb.Page>Dashboard</Breadcrumb.Page>
 		</Breadcrumb.Item>
 	</Breadcrumb.Root>
 </Topbar.Root>
 
 <Page.Root>
-	<Page.Header>
-		<div class="flex flex-col gap-1">
-			<Page.Title>Welcome, {user?.username}</Page.Title>
-			<Page.Description>Manage the collections of {appName}.</Page.Description>
-		</div>
-	</Page.Header>
+	<div class="mx-auto flex w-full max-w-5xl flex-col gap-10">
+		<Page.Header>
+			<div class="flex flex-col gap-1">
+				<Page.Title>Welcome, {user?.username}</Page.Title>
+				<Page.Description>
+					Manage the collections of {appName}{cloudflare
+						? ' and keep an eye on its Cloudflare account'
+						: ''}.
+				</Page.Description>
+			</div>
+		</Page.Header>
 
-	{#if !collections.length}
-		<Empty.Root>
-			<Empty.Icon><Icon.Root icon="lucide:table-2" /></Empty.Icon>
-			<Empty.Title>No collections yet</Empty.Title>
-			<Empty.Description>
-				Create your first collection with the + button next to "Collections" in the sidebar.
-			</Empty.Description>
-		</Empty.Root>
-	{/if}
+		{#if !collections.length}
+			<Empty.Root>
+				<Empty.Icon><Icon.Root icon="lucide:table-2" /></Empty.Icon>
+				<Empty.Title>No collections yet</Empty.Title>
+				<Empty.Description>
+					Create your first collection with the + button next to "Collections" in the sidebar.
+				</Empty.Description>
+			</Empty.Root>
+		{/if}
+
+		{#if cloudflare}
+			<CloudflareOverview />
+		{/if}
+	</div>
 </Page.Root>

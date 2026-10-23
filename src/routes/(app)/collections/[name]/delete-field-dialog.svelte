@@ -26,6 +26,7 @@
 
 	<Form.Root
 		{form}
+		success="Field deleted"
 		enhance={async (instance) => {
 			if (await instance.submit()) {
 				close();

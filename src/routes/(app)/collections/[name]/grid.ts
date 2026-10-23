@@ -1,5 +1,7 @@
 import type { FieldOptions, FieldType } from '#lib/fields/field-types.js';
 
+import { resolve } from '$app/paths';
+
 import { FIELD_TYPES } from '#lib/fields/field-types.js';
 
 /** A field as returned by `listRecords`. */
@@ -11,7 +13,7 @@ export type GridField = {
 	unique: boolean;
 	defaultValue: string | null;
 	options: FieldOptions;
-	/** Auth fields of the built-in `users` collection can't be renamed or deleted. */
+	/** Fields of built-in collections (like `users`) can't be renamed or deleted. */
 	system: boolean;
 };
 
@@ -19,20 +21,28 @@ export type RelationRef = { id: string; label: string };
 
 export type GridValue = string | number | null | RelationRef[];
 
-export type GridRecord = { id: string; created_at: number; updated_at: number } & {
+/**
+ * A record with a value per field. `_key` identifies it: the value of its ID field, or its row
+ * number when the collection has none. Field names start with a letter, so it never collides.
+ */
+export type GridRecord = { _key: string } & {
 	[column: string]: GridValue;
 };
 
-/** A column of the grid: one of the system columns or a field. */
+/** A column of the grid: a field, or a virtual column of a built-in collection. */
 export type GridColumn = {
 	name: string;
 	label: string;
 	icon: string;
-	/** Undefined for system columns. */
+	/** Undefined for virtual columns. */
 	field?: GridField;
 	sortable: boolean;
 	/** Read-only column that isn't stored in the table, e.g. the sign-in methods of users. */
-	virtual?: 'sign-in';
+	virtual?: 'sign-in' | 'preview';
+	/** Collection a relation field points to, e.g. `files` (shows thumbnails). */
+	relationTarget?: string;
+	/** Show the value as a file size (`size` of the built-in `files` collection). */
+	fileSize?: boolean;
 };
 
 /**
@@ -47,11 +57,14 @@ export const SIGN_IN_COLUMN: GridColumn = {
 	virtual: 'sign-in'
 };
 
-export const SYSTEM_COLUMNS: GridColumn[] = [
-	{ name: 'id', label: 'Text', icon: 'lucide:key-round', sortable: true },
-	{ name: 'created_at', label: 'Created', icon: 'lucide:clock', sortable: true },
-	{ name: 'updated_at', label: 'Updated', icon: 'lucide:clock', sortable: true }
-];
+/** Thumbnail of the built-in `files` collection's records. */
+export const PREVIEW_COLUMN: GridColumn = {
+	name: '_preview',
+	label: 'Preview',
+	icon: 'lucide:image',
+	sortable: false,
+	virtual: 'preview'
+};
 
 export function fieldColumn(field: GridField): GridColumn {
 	const type = FIELD_TYPES[field.type];
@@ -63,6 +76,21 @@ export function fieldColumn(field: GridField): GridColumn {
 		field,
 		sortable: field.type !== 'blob'
 	};
+}
+
+/** Link that opens a record in its collection's record sheet. */
+export function recordHref(collection: string, id: string) {
+	const search = new URLSearchParams({ record: id });
+
+	return resolve(`/(app)/collections/[name]?${search}`, { name: collection });
+}
+
+/** When the record was last saved: its first `updated` field, if the collection has one. */
+export function lastUpdated(record: GridRecord, fields: GridField[]) {
+	const field = fields.find((candidate) => candidate.type === 'updated');
+	const value = field ? record[field.name] : null;
+
+	return typeof value === 'number' ? value : undefined;
 }
 
 /** `2026-01-31 14:05:09` in UTC, so server and browser render the same text. */

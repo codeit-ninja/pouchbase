@@ -7,11 +7,11 @@ import { loginSchema } from '#lib/schemas/auth.js';
 export const login = form(loginSchema, async (data) => {
 	const { locals } = getRequestEvent();
 
-	const result = await locals.services.sessions().login(data.username, data._password);
+	const result = await locals.services.sessions().login(data.identity, data._password);
 
 	if (result.isErr()) {
 		if (result.error.code === 4003) {
-			invalid('Invalid username or password');
+			invalid('Invalid username, email or password');
 		}
 
 		error(500, result.error.message);

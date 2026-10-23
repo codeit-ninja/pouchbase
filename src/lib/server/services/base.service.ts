@@ -3,7 +3,7 @@ import type { ResultAsync } from 'neverthrow';
 
 import { getRequestEvent } from '$app/server';
 
-import { CloudflareApiError } from '../cloudflare/d1';
+import { PlatformError } from '../platform';
 import { db } from '../db';
 
 /** The error union of a service method, e.g. `ErrorOf<ReturnType<FieldsService['create']>>`. */
@@ -39,16 +39,16 @@ export class Service {
 			code,
 			message,
 			data:
-				error instanceof CloudflareApiError
+				error instanceof PlatformError
 					? { status: error.status, errors: error.errors }
-					: error instanceof Error && error.cause instanceof CloudflareApiError
+					: error instanceof Error && error.cause instanceof PlatformError
 						? { status: error.cause.status, errors: error.cause.errors }
 						: undefined
 		};
 	}
 
 	/**
-	 * Get the Drizzle database (D1 over the Cloudflare HTTP API)
+	 * Get the Drizzle database (the system database, through the platform driver)
 	 *
 	 * @returns The database instance
 	 */

@@ -34,7 +34,7 @@
 	const callbackId = $props.id();
 </script>
 
-<Dialog.Content class="max-w-lg">
+<Dialog.Content size="md">
 	<Dialog.Header>
 		<Dialog.Title class="flex items-center gap-2">
 			<Icon.Root icon={info.icon} class="size-5" />
@@ -48,6 +48,7 @@
 
 	<Form.Root
 		{form}
+		success="{info.label} settings saved"
 		enhance={async (instance) => {
 			if (await instance.submit()) {
 				close();

@@ -16,6 +16,36 @@ export const SESSION_COOKIE = 'session';
 const DAY = 24 * 60 * 60 * 1000;
 const SESSION_TTL = 30 * DAY;
 
+/**
+ * Validated sessions are trusted for this long without asking the database again, per isolate.
+ * Every request validates the session first, so this saves a round-trip on most of them; a logout
+ * on another isolate takes at most this long to apply here.
+ */
+const CACHE_TTL = 30_000;
+const CACHE_LIMIT = 1000;
+
+/** Validated sessions by token hash. */
+const cache = new Map<string, { user: SessionUser; expiresAt: number; validatedAt: number }>();
+
+function cacheSession(id: string, user: SessionUser, expiresAt: number) {
+	if (cache.size >= CACHE_LIMIT) {
+		const now = Date.now();
+
+		for (const [key, entry] of cache) {
+			if (now - entry.validatedAt >= CACHE_TTL) {
+				cache.delete(key);
+			}
+		}
+
+		// Still full: drop the oldest entry (a Map iterates in insertion order).
+		if (cache.size >= CACHE_LIMIT) {
+			cache.delete(cache.keys().next().value!);
+		}
+	}
+
+	cache.set(id, { user, expiresAt, validatedAt: Date.now() });
+}
+
 export class SessionsService extends Service {
 	/** Creates a session for the user and sets the session cookie. */
 	create(userId: string): ResultAsync<void, ServiceError<4000, 'CREATE_SESSION_FAILED'>> {
@@ -32,7 +62,8 @@ export class SessionsService extends Service {
 
 	/**
 	 * Returns the user for a session token, or `null` when the session is unknown or expired.
-	 * Sessions are extended once they are past their halfway point.
+	 * Sessions are extended once they are past their halfway point. Valid sessions are cached
+	 * briefly (`CACHE_TTL`).
 	 */
 	validate(
 		token: string
@@ -40,6 +71,18 @@ export class SessionsService extends Service {
 		return fromPromise(
 			(async () => {
 				const id = await hashToken(token);
+				const cached = cache.get(id);
+
+				if (cached) {
+					const now = Date.now();
+
+					if (now - cached.validatedAt < CACHE_TTL && cached.expiresAt > now) {
+						return cached.user;
+					}
+
+					cache.delete(id);
+				}
+
 				const [row] = await this.db
 					.select({
 						user: { id: users.id, username: users.username, email: users.email },
@@ -60,11 +103,15 @@ export class SessionsService extends Service {
 					return null;
 				}
 
+				let expiresAt = row.expiresAt;
+
 				if (remaining < SESSION_TTL / 2) {
-					const expiresAt = new Date(Date.now() + SESSION_TTL);
+					expiresAt = new Date(Date.now() + SESSION_TTL);
 					await this.db.update(sessions).set({ expiresAt }).where(eq(sessions.id, id));
 					this.setCookie(token, expiresAt);
 				}
+
+				cacheSession(id, row.user, expiresAt.getTime());
 
 				return row.user;
 			})(),
@@ -83,15 +130,18 @@ export class SessionsService extends Service {
 
 		return fromPromise(
 			(async () => {
-				await this.db.delete(sessions).where(eq(sessions.id, await hashToken(token)));
+				const id = await hashToken(token);
+
+				cache.delete(id);
+				await this.db.delete(sessions).where(eq(sessions.id, id));
 			})(),
 			(error) => this.error(4002, 'INVALIDATE_SESSION_FAILED', error)
 		);
 	}
 
-	/** Checks the credentials and starts a session. */
+	/** Checks the credentials (username or email, and password) and starts a session. */
 	login(
-		username: string,
+		identity: string,
 		password: string
 	): ResultAsync<
 		SessionUser,
@@ -102,7 +152,7 @@ export class SessionsService extends Service {
 	> {
 		return this.services
 			.users()
-			.findByUsername(username)
+			.findByIdentity(identity)
 			.andThen((user) =>
 				fromPromise(
 					user ? verifyPassword(password, user.passwordHash) : Promise.resolve(false),

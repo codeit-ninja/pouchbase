@@ -7,7 +7,7 @@ import { readJsonObject } from '#lib/server/api-body.js';
  * Creates an app user with a username and password.
  * Body: `{ "username", "password", "email"?, "name"? }` → `{ token, user_id }`.
  */
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const body = await readJsonObject(request);
 
 	if (!body) {
@@ -42,6 +42,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			default:
 				return json({ message: 'Could not sign up' }, 500);
 		}
+	}
+
+	const email = typeof body.email === 'string' ? body.email.trim() : '';
+
+	// Sends the verification email in the background, when mail is set up; the sign-up doesn't wait.
+	if (email) {
+		const verification = locals.services
+			.auth()
+			.requestVerification(email)
+			.mapErr((failure) => {
+				if (failure.code !== 11027) {
+					console.error('[pouchbase] Could not send the verification email', failure);
+				}
+			});
+
+		platform?.ctx?.waitUntil(Promise.resolve(verification));
 	}
 
 	return json({ token: result.value.token, user_id: result.value.userId });

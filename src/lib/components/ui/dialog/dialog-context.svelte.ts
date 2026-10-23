@@ -26,7 +26,8 @@ interface DialogEntry {
  * `Dialog.Provider`. Opening a dialog while another one is open replaces it.
  */
 export class Dialogs {
-	current = $state<DialogEntry | null>(null);
+	// Raw, so `current` keeps the identity of the entry (`close` compares against it).
+	current = $state.raw<DialogEntry | null>(null);
 	isOpen = $state(false);
 
 	/**

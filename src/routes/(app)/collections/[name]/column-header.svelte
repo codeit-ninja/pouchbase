@@ -10,9 +10,11 @@
 		onSort: (order: 'asc' | 'desc') => void;
 		onRename: () => void;
 		onDelete: () => void;
+		/** Only for computed fields: change how the value is calculated. */
+		onEditComputation?: () => void;
 	};
 
-	let { column, sorted, onSort, onRename, onDelete }: Props = $props();
+	let { column, sorted, onSort, onRename, onDelete, onEditComputation }: Props = $props();
 </script>
 
 {#if column.virtual}
@@ -25,7 +27,7 @@
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger
 			variant="ghost"
-			class="-mx-3 h-control w-[calc(100%+1.5rem)] justify-start gap-2 rounded-none border-0 px-3 text-xs font-medium text-zinc-600"
+			class="-mx-3 h-row w-[calc(100%+1.5rem)] justify-start gap-2 rounded-none border-0 px-3 text-xs font-medium text-zinc-600"
 			aria-label="{column.name} column options"
 		>
 			<Icon.Root icon={column.icon} class="size-3.5 text-zinc-400" />
@@ -67,6 +69,13 @@
 					<Icon.Root icon="lucide:pencil" />
 					Rename field
 				</DropdownMenu.Item>
+
+				{#if column.field.type === 'computed' && onEditComputation}
+					<DropdownMenu.Item onSelect={onEditComputation}>
+						<Icon.Root icon="lucide:square-function" />
+						Edit computation
+					</DropdownMenu.Item>
+				{/if}
 
 				<DropdownMenu.Separator />
 

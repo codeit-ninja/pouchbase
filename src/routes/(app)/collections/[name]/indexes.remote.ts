@@ -1,9 +1,9 @@
 import { error, invalid } from '@sveltejs/kit';
 import { z } from 'zod';
 
-import { form, getRequestEvent, query } from '$app/server';
+import { command, form, getRequestEvent, query } from '$app/server';
 
-import { createIndexSchema, deleteIndexSchema } from '#lib/schemas/indexes.js';
+import { createIndexSchema, deleteIndexSchema, updateIndexSchema } from '#lib/schemas/indexes.js';
 
 function requireUser() {
 	const { locals } = getRequestEvent();
@@ -57,7 +57,38 @@ export const createIndex = form(createIndexSchema, async (data, issue) => {
 	return { name: result.value.name };
 });
 
-export const deleteIndex = form(deleteIndexSchema, async (data) => {
+/** Changes the columns or uniqueness of a custom index; it gets a new name. */
+export const updateIndex = form(updateIndexSchema, async (data, issue) => {
+	const { services } = requireUser();
+
+	const result = await services
+		.indexes()
+		.update(data.collection, data.name, { columns: data.columns, unique: data.unique });
+
+	if (result.isErr()) {
+		switch (result.error.code) {
+			case 6006:
+			case 9004:
+				error(404, 'Index not found');
+				break;
+			case 9001:
+				invalid(issue.columns('Choose between 1 and 8 existing columns'));
+				break;
+			case 9002:
+				invalid("Some records share the same values, so this index can't be unique");
+				break;
+		}
+
+		error(500, result.error.message);
+	}
+
+	void listIndexes(data.collection).refresh();
+
+	return { name: result.value.name };
+});
+
+/** A command rather than a form, so it can be a button inside the edit collection form. */
+export const deleteIndex = command(deleteIndexSchema, async (data) => {
 	const { services } = requireUser();
 
 	const result = await services.indexes().delete(data.collection, data.name);

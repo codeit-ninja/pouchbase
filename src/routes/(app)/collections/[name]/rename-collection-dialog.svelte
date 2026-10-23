@@ -27,6 +27,7 @@
 
 	<Form.Root
 		{form}
+		success="Collection renamed"
 		enhance={async (instance) => {
 			if (await instance.submit()) {
 				const name = instance.result?.name;

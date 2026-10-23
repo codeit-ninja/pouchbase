@@ -1,0 +1,16 @@
+services:
+  pouchbase:
+    # The image published with every release; replace with `build: .` to build from this checkout.
+    image: ghcr.io/pouchbase/pouchbase:latest
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      # The public URL of this instance, used for redirects and OAuth callbacks.
+      # Put a reverse proxy with HTTPS in front for anything but local use.
+      ORIGIN: ${ORIGIN:-http://localhost:3000}
+      # The data lives on Cloudflare (D1 and R2); Compose reads these from `.env` next to this file.
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      # Largest accepted request body; uploads are limited to 10 MB by the app.
+      BODY_SIZE_LIMIT: 16M

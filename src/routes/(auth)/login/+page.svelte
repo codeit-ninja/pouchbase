@@ -15,13 +15,13 @@
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>Log in</Card.Title>
-			<Card.Description>Log in with your username and password.</Card.Description>
+			<Card.Description>Log in with your username or email and password.</Card.Description>
 		</Card.Header>
 
 		<Card.Content>
 			<Form.Root {form}>
-				<Form.Field field={form.fields.username}>
-					<Form.Label>Username</Form.Label>
+				<Form.Field field={form.fields.identity}>
+					<Form.Label>Username or email</Form.Label>
 					<Form.Input autocomplete="username" />
 					<Form.Errors />
 				</Form.Field>

@@ -7,7 +7,8 @@ declare global {
 	namespace App {
 		interface Platform {
 			env: Env;
-			ctx: ExecutionContext;
+			/** Only on Workers; the Node target (Docker, the binary) has no execution context. */
+			ctx?: ExecutionContext;
 			caches: CacheStorage;
 			cf?: IncomingRequestCfProperties;
 		}
@@ -18,7 +19,10 @@ declare global {
 			user: SessionUser | null;
 		}
 		// interface PageData {}
-		// interface PageState {}
+		interface PageState {
+			/** Opens the edit collection sheet, e.g. right after creating the collection. */
+			editCollection?: boolean;
+		}
 	}
 }
 

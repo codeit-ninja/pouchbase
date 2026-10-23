@@ -23,6 +23,7 @@
 
 	<Form.Root
 		{form}
+		success="Field renamed"
 		enhance={async (instance) => {
 			if (await instance.submit()) {
 				close();

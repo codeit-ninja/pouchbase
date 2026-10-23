@@ -2,11 +2,17 @@
 	"$schema": "./node_modules/wrangler/config-schema.json",
 	"name": "pouchbase",
 	"compatibility_date": "2026-10-20",
-	"compatibility_flags": ["nodejs_als"],
+	// global_fetch_strictly_public: functions run as Workers on the same account, which the app can
+	// only reach over their workers.dev URL with this flag (src/lib/server/functions.ts).
+	"compatibility_flags": ["nodejs_als", "global_fetch_strictly_public"],
 	"main": ".svelte-kit/cloudflare/_worker.js",
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
+	},
+	// Once a minute: starts scheduled backups and continues running ones (scripts/worker-entry.mjs).
+	"triggers": {
+		"crons": ["* * * * *"]
 	},
 	"workers_dev": true,
 	"preview_urls": true

@@ -8,7 +8,7 @@
 	scope="col"
 	{...rest}
 	class={[
-		'h-control border-r border-b border-zinc-200 px-3 text-xs font-medium whitespace-nowrap text-zinc-600 last:border-r-0',
+		'h-row border-r border-b border-zinc-200 px-3 text-xs font-medium whitespace-nowrap text-zinc-600 last:border-r-0',
 		className
 	]}
 >

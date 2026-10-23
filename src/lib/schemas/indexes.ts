@@ -20,6 +20,11 @@ export const createIndexSchema = z.object({
 	unique: z.boolean().default(false)
 });
 
+export const updateIndexSchema = createIndexSchema.extend({
+	/** Hidden field: the index to replace. */
+	name: z.string()
+});
+
 export const deleteIndexSchema = z.object({
 	/** Hidden fields. */
 	collection: z.string(),

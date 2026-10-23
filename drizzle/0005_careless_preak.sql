@@ -1,0 +1,1 @@
+ALTER TABLE `collections` ADD `settings` text DEFAULT '{}' NOT NULL;

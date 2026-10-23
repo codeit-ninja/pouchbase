@@ -7,7 +7,7 @@
 <th
 	scope="col"
 	{...rest}
-	class={['h-control px-4 text-xs font-medium tracking-wide text-zinc-500 uppercase', className]}
+	class={['h-row px-4 text-xs font-medium tracking-wide text-zinc-500 uppercase', className]}
 >
 	{@render children?.()}
 </th>

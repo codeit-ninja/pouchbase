@@ -16,12 +16,13 @@
 	<Dialog.Header>
 		<Dialog.Title>New collection</Dialog.Title>
 		<Dialog.Description>
-			A collection is a table in your app database. You can add fields after creating it.
+			A collection is a table in your app database. Next, you add its fields.
 		</Dialog.Description>
 	</Dialog.Header>
 
 	<Form.Root
 		{form}
+		success="Collection created"
 		enhance={async (instance) => {
 			if (await instance.submit()) {
 				const name = instance.result?.name;
@@ -30,7 +31,9 @@
 				close();
 
 				if (name) {
-					await goto(resolve('/(app)/collections/[name]', { name }));
+					await goto(resolve('/(app)/collections/[name]', { name }), {
+						state: { editCollection: true }
+					});
 				}
 			}
 		}}
