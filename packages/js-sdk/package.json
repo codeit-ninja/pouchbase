@@ -1,0 +1,63 @@
+{
+	"name": "@pouchbasejs/js-sdk",
+	"version": "0.0.0",
+	"description": "TypeScript SDK for Pouchbase",
+	"license": "MIT",
+	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/pouchbase/pouchbase.git",
+		"directory": "packages/js-sdk"
+	},
+	"homepage": "https://pouchbase.io",
+	"keywords": [
+		"pouchbase",
+		"sdk",
+		"backend",
+		"cloudflare"
+	],
+	"sideEffects": false,
+	"files": [
+		"dist"
+	],
+	"bin": {
+		"pouchbase": "./dist/cli.js"
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "tsdown",
+		"dev": "tsdown --watch",
+		"check": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "prettier --check . && eslint .",
+		"format": "prettier --write .",
+		"prepublishOnly": "pnpm build"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@types/node": "^22.20.5",
+		"eslint": "^10.13.0",
+		"eslint-config-prettier": "^10.1.8",
+		"globals": "^17.13.0",
+		"prettier": "^3.9.10",
+		"tsdown": "^0.23.1",
+		"typescript": "^6.0.3",
+		"typescript-eslint": "^8.72.0",
+		"vitest": "^5.0.5"
+	}
+}

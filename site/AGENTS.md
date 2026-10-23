@@ -1,6 +1,7 @@
 ## Project Configuration
 
-- **Project**: the pouchbase.io website (marketing site and docs for [Pouchbase](https://github.com/pouchbase/pouchbase))
+- **Project**: the pouchbase.io website (marketing site and docs for [Pouchbase](https://github.com/pouchbase/pouchbase)), in the `site/` folder of the Pouchbase repository; the app is at the repository root (`..`) and the SDK in `../packages/js-sdk`
+- **License**: all rights reserved (see `LICENSE`), unlike the AGPL app and the MIT packages; never copy site code into the packages
 - **Stack**: SvelteKit + Svelte 5 (TypeScript), Tailwind CSS 4, adapter-cloudflare (Workers)
 - **Package Manager**: pnpm
 
@@ -16,9 +17,9 @@ Everything in this project is **English**: code, identifiers, comments, UI text,
 
 ## Components
 
-Before writing or editing any `.svelte` file, load the **`pouchbase-components`** skill (`.claude/skills/pouchbase-components/SKILL.md`). These are the same conventions as in the Pouchbase app. In short:
+Before writing or editing any `.svelte` file, load the **`pouchbase-site-components`** skill (`../.claude/skills/pouchbase-site-components/SKILL.md`). These are the same conventions as in the Pouchbase app. In short:
 
-- Reuse what exists in `src/lib/components/ui/`; if nothing fits, check the Pouchbase app (`../pouchbase/src/lib/components/ui/`) and copy it over, otherwise **always** create a reusable component in `ui/` instead of inline markup.
+- Reuse what exists in `src/lib/components/ui/`; if nothing fits, check the Pouchbase app (`../src/lib/components/ui/`) and copy it over, otherwise **always** create a reusable component in `ui/` instead of inline markup.
 - Compound structure with an `index.ts` and a namespace import: `<Button.Root>`, `<Card.Title>`, ...
 - File names are lowercase kebab-case, prefixed with the component name: `card-root.svelte`, `card-title.svelte`, `card-context.ts`.
 - Icons always come from Iconify through `<Icon.Root icon="lucide:plus" />` (literal names, bundled by `vite/iconify.ts`); never `@lucide/svelte` or other icon component libraries.

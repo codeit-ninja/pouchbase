@@ -1,0 +1,13 @@
+# Package Managers
+pnpm-lock.yaml
+
+# Output
+/dist
+/coverage
+
+# Changesets writes it
+CHANGELOG.md
+
+# Claude Code
+.claude
+AGENTS.md

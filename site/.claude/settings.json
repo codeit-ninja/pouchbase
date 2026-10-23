@@ -1,5 +1,0 @@
-{
-	"permissions": {
-		"additionalDirectories": ["../pouchbase", "../pouchbase-js-sdk"]
-	}
-}

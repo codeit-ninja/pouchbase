@@ -15,11 +15,15 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install -g "$(node -p "require('./package.json').packageManager")"
 
-# Install all dependencies and build the Node target.
+# Install the dependencies of the app and the workspace packages it uses, and build the Node target.
+# Every workspace package.json is copied so the lockfile matches, but the site and the JS SDK aren't
+# installed (`--filter pouchbase...`) and the rest of their files are left out by .dockerignore.
 FROM base AS build
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/plugin-sdk/package.json packages/plugin-sdk/
-RUN pnpm install --frozen-lockfile --ignore-scripts
+COPY packages/js-sdk/package.json packages/js-sdk/
+COPY site/package.json site/
+RUN pnpm install --frozen-lockfile --ignore-scripts --filter "pouchbase..."
 COPY . .
 ENV POUCHBASE_TARGET=node
 RUN pnpm build:node
@@ -30,6 +34,8 @@ RUN pnpm build:node
 FROM base AS dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/plugin-sdk/package.json packages/plugin-sdk/
+COPY packages/js-sdk/package.json packages/js-sdk/
+COPY site/package.json site/
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts --filter pouchbase
 
 FROM node:26-alpine AS runner

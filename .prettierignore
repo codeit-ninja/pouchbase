@@ -8,6 +8,10 @@ bun.lockb
 # Miscellaneous
 /static/
 
+# The site and the JS SDK have their own Prettier setup (`pnpm --filter <name> lint`)
+/site/
+/packages/js-sdk/
+
 # Claude Code
 .claude
 AGENTS.md

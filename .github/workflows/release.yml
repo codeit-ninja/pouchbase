@@ -1,10 +1,15 @@
 # Releases Pouchbase with Changesets, on every push to main:
 #
 # 1. With pending changesets, it opens (or updates) a "Version Packages" pull request that bumps the
-#    version in package.json and writes CHANGELOG.md (`pnpm changeset:version`).
-# 2. Once that pull request is merged, there are no pending changesets and the new version has no
-#    tag yet: it creates the tag and a GitHub release with the changelog entry as notes, then builds
-#    and pushes the Docker image (docker.yml) and attaches the single binaries (binaries.yml).
+#    versions in the package.json files and writes the CHANGELOG.md files (`pnpm changeset:version`).
+# 2. Once that pull request is merged, there are no pending changesets:
+#    - the SDKs in packages/ whose version isn't on npm yet are built and published (`pnpm release`).
+#      They get no git tag or GitHub release, so the repository's releases stay those of the app.
+#    - when the app's version has no tag yet, it creates the tag and a GitHub release with the
+#      changelog entry as notes, then builds and pushes the Docker image (docker.yml) and attaches
+#      the single binaries (binaries.yml).
+#
+# Publishing to npm needs the NPM_TOKEN secret (an automation or granular token for @pouchbasejs).
 #
 # Releases made with the GITHUB_TOKEN don't trigger other workflows, which is why the Docker image and
 # the binaries are built by calling their workflows from here instead of through a `release` trigger.
@@ -22,6 +27,8 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  # npm provenance for the published packages.
+  id-token: write
 
 jobs:
   release:
@@ -44,20 +51,26 @@ jobs:
         with:
           node-version: 26
           cache: pnpm
+          registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Create or update the version pull request
+      - name: Create or update the version pull request, or publish the packages
         id: changesets
         uses: changesets/action@v1
         with:
           version: pnpm changeset:version
+          publish: pnpm release
+          createGithubReleases: false
           title: Version Packages
           commit: Version Packages
         env:
           # Also used by @changesets/changelog-github to link pull requests and authors.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
 
       - name: Tag and release the new version
         id: release

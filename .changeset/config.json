@@ -10,10 +10,10 @@
 		}
 	],
 	"commit": false,
-	"ignore": [],
+	"ignore": ["pouchbase-site"],
 	"privatePackages": {
 		"version": true,
-		"tag": true
+		"tag": false
 	},
 	"fixed": [],
 	"linked": [],

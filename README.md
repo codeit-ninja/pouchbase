@@ -284,4 +284,4 @@ Plugins are built with [`@pouchbasejs/plugin-sdk`](packages/plugin-sdk), which h
 
 Pouchbase is licensed under the [GNU Affero General Public License v3.0](LICENSE). Apps that only talk to Pouchbase through its API are not affected by this license; modified versions of Pouchbase that are offered as a network service must make their source code available under the same license.
 
-Plugins are covered by the [Pouchbase Plugin Exception](PLUGIN-EXCEPTION.md): a plugin that only uses the plugin API may be distributed under any license, including a proprietary one. The plugin SDK (`@pouchbasejs/plugin-sdk`, in `packages/plugin-sdk`) is licensed under the MIT license.
+Plugins are covered by the [Pouchbase Plugin Exception](PLUGIN-EXCEPTION.md): a plugin that only uses the plugin API may be distributed under any license, including a proprietary one. The plugin SDK (`@pouchbasejs/plugin-sdk`, in `packages/plugin-sdk`) and the JavaScript SDK (`@pouchbasejs/js-sdk`, in `packages/js-sdk`) are licensed under the MIT license. The website in `site/` is not open source: all rights reserved.

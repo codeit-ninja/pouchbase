@@ -1,3 +1,16 @@
+## Repository
+
+This repository holds the app (at the root) and its workspace packages, each with its own `AGENTS.md`:
+
+| Folder                | What it is                                                     | License             |
+| --------------------- | -------------------------------------------------------------- | ------------------- |
+| `.`                   | The app (SvelteKit on Cloudflare Workers or Node) and the API  | AGPL-3.0            |
+| `packages/plugin-sdk` | `@pouchbasejs/plugin-sdk`, the plugin contract and CLI         | MIT                 |
+| `packages/js-sdk`     | `@pouchbasejs/js-sdk`, the TypeScript SDK for the public API   | MIT                 |
+| `site`                | pouchbase.io, the marketing site and docs                      | All rights reserved |
+
+Run a package's scripts from the root with `pnpm --filter <name> <script>` (`pouchbase-site`, `@pouchbasejs/js-sdk`, `@pouchbasejs/plugin-sdk`). There is one lockfile, at the root.
+
 ## Project Configuration
 
 - **Language**: TypeScript
@@ -36,7 +49,7 @@ Before writing server-side code (`src/lib/server`, `*.remote.ts`, hooks, `+page.
 
 ## Public API and SDK
 
-The TypeScript SDK lives next to this repo in `../pouchbase-js-sdk` (an extra working directory in `.claude/settings.json`) and wraps the public API in `src/routes/api/`. When you add or change an endpoint there (path, body, response or status codes), update the SDK and its `AGENTS.md` API table to match, or say that it still needs to happen.
+The TypeScript SDK lives in the workspace package `packages/js-sdk` (`@pouchbasejs/js-sdk`, MIT) and wraps the public API in `src/routes/api/`. When you add or change an endpoint there (path, body, response or status codes), update the SDK and its `AGENTS.md` API table in the same change, with a changeset for `@pouchbasejs/js-sdk`, and update the docs in `site/` where they cover the SDK.
 
 ## Plugin contract
 
@@ -51,11 +64,11 @@ The plugin contract lives in the workspace package `packages/plugin-sdk` (`@pouc
 
 Versioning and the changelog are managed with [Changesets](https://changesets.dev) (`.changeset/`, see its README).
 
-- Every new feature, bug fix or breaking change gets a changeset: run `pnpm changeset` or add a Markdown file to `.changeset/` by hand, with frontmatter `'pouchbase': patch | minor | major` and a one-line, user-facing description in English.
+- Every new feature, bug fix or breaking change gets a changeset: run `pnpm changeset` or add a Markdown file to `.changeset/` by hand, with frontmatter `'pouchbase': patch | minor | major` (or `'@pouchbasejs/js-sdk'` / `'@pouchbasejs/plugin-sdk'` for the packages) and a one-line, user-facing description in English.
 - Create the changeset in the same change as the code, as part of the work, not afterwards.
 - Do **not** create a separate changeset when the change belongs to work that already has an unreleased changeset in `.changeset/` (e.g. fixing a bug in a feature that is still pending): update that changeset's description if it no longer covers the change.
 - Bump types: `patch` for bug fixes and small improvements, `minor` for new features, `major` for breaking changes. Internal refactors, docs and tooling changes need no changeset.
-- Never run `pnpm changeset:version` unless asked; the Release workflow does it in the Version Packages pull request, and merging that pull request releases the version.
+- Never run `pnpm changeset:version` unless asked; the Release workflow does it in the Version Packages pull request, and merging that pull request releases the version: the app as a `v<version>` GitHub release, the SDKs on npm. The site is never versioned (Changesets ignores it).
 
 ---
 

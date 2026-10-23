@@ -1,12 +1,12 @@
 ---
-name: pouchbase-components
-description: Project rules for building UI on the pouchbase.io website. MUST be loaded before creating or editing any .svelte file, page, section or form in this project. Covers when to create a reusable component, reusing components from the Pouchbase app, the compound component structure (Button.Root, Card.Title, ...), lowercase kebab-case file naming, context sharing, styling, icons and the English-only rule.
+name: pouchbase-site-components
+description: Project rules for building UI on the pouchbase.io website (the site/ folder). MUST be loaded before creating or editing any .svelte file, page, section or form under site/. Covers when to create a reusable component, reusing components from the Pouchbase app, the compound component structure (Button.Root, Card.Title, ...), lowercase kebab-case file naming, context sharing, styling, icons and the English-only rule.
 ---
 
 # Pouchbase component rules (website)
 
 These rules apply to every piece of UI in this project. They are the same conventions as in the
-Pouchbase app (`github.com/pouchbase/pouchbase`), so components can move between the two. Follow them together with the
+Pouchbase app (the repository root), so components can move between the two. Follow them together with the
 `svelte-core-bestpractices` and `svelte-code-writer` skills.
 
 ## 1. Language
@@ -18,7 +18,7 @@ you in another language.
 ## 2. Reuse first, otherwise create a component
 
 1. Before writing any UI, check `src/lib/components/ui/` for an existing component. If the
-   Pouchbase app is available (`../pouchbase/src/lib/components/ui/`), check there too and copy
+   Pouchbase app has one (`src/lib/components/ui/` at the repository root), check there too and copy
    the component over instead of writing a new one, so both projects stay consistent.
 2. If one fits, use it. Extend it with a prop or variant if needed; don't fork it.
 3. If none fits, **always create a reusable component** in `src/lib/components/ui/<component>/`.

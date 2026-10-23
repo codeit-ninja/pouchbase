@@ -22,7 +22,8 @@
 		"cf:whoami": "wrangler whoami",
 		"seed:test-users": "node scripts/seed-test-users.mjs",
 		"changeset": "changeset",
-		"changeset:version": "changeset version"
+		"changeset:version": "changeset version",
+		"release": "pnpm --filter \"./packages/*\" build && changeset publish"
 	},
 	"devDependencies": {
 		"@changesets/changelog-github": "^1.0.1",
