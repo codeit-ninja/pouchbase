@@ -2,7 +2,7 @@ import { FILES_COLLECTION } from '#lib/files/files.js';
 import { USERS_COLLECTION } from '#lib/auth/users.js';
 
 /**
- * API rules of a collection, like PocketBase's: one per action of the records API
+ * API rules of a collection: one per action of the records API
  * (`/api/collections/<name>/records`). Shared between the client and the server.
  */
 

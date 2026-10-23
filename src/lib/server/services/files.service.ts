@@ -382,8 +382,8 @@ export class FilesService extends Service {
 	/**
 	 * A file's content, or one of its thumbnails (`thumb`, e.g. `100x100`). A thumbnail is only
 	 * served for a configured size; when it doesn't exist yet it is generated and stored. In every
-	 * other case (thumbnails off, unknown size, not an image) the original is served, like
-	 * PocketBase. Returns `null` when the file doesn't exist.
+	 * other case (thumbnails off, unknown size, not an image) the original is served.
+	 * Returns `null` when the file doesn't exist.
 	 */
 	open(
 		id: string,

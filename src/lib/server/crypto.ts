@@ -72,7 +72,7 @@ export async function hashToken(token: string) {
 
 const ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
-/** 15 character record id, like PocketBase. */
+/** 15 character record id. */
 export function generateRecordId() {
 	const bytes = crypto.getRandomValues(new Uint8Array(15));
 	return Array.from(bytes, (byte) => ID_ALPHABET[byte % ID_ALPHABET.length]).join('');

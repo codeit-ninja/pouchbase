@@ -114,7 +114,7 @@ function compare(
 	switch (operator) {
 		case '=':
 		case '!=': {
-			// Like PocketBase, `""` and `null` both match an empty value.
+			// `""` and `null` both match an empty value.
 			const sql = right.empty
 				? `COALESCE(${left.sql}, '') = ''`
 				: left.empty
@@ -222,7 +222,7 @@ export function both(first: SqlCondition, second: SqlCondition): SqlCondition {
 }
 
 /**
- * An `ORDER BY` list from `?sort=` in PocketBase syntax: field names separated by commas, `-` in
+ * An `ORDER BY` list from `?sort=`: field names separated by commas, `-` in
  * front for descending (`-created_at,title`).
  * @throws {FilterError} For fields that don't exist or can't be sorted on.
  */

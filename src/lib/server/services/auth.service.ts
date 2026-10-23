@@ -415,7 +415,7 @@ export class AuthService extends Service {
 	}
 
 	/**
-	 * Starts an OAuth sign-in in a popup (like PocketBase). The app chooses a `state` and the S256
+	 * Starts an OAuth sign-in in a popup. The app chooses a `state` and the S256
 	 * `challenge` of a secret verifier; only whoever knows that verifier can collect the token later
 	 * (`oauthResult`). Pouchbase uses its own state and PKCE verifier towards the provider.
 	 *

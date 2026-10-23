@@ -1,7 +1,7 @@
 import type { ApiRules } from '#lib/filter/rules.js';
 
 /**
- * Thumbnail sizes in PocketBase syntax:
+ * Thumbnail sizes:
  *
  * - `WxH`  crop to fill W×H, centered (e.g. `100x100`)
  * - `WxHt` crop to fill W×H from the top

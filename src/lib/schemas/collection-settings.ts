@@ -9,7 +9,7 @@ export const thumbnailSettingsSchema = z
 		/** Collection name, sent as a hidden field. */
 		collection: z.string(),
 		enabled: z.boolean().default(false),
-		/** Sizes in PocketBase syntax, separated by commas or new lines. */
+		/** Thumbnail sizes (`WxH`, `WxHt`, ...), separated by commas or new lines. */
 		sizes: z.string().max(2000)
 	})
 	.superRefine((data, ctx) => {

@@ -1,7 +1,7 @@
 import type { RequestEvent } from '@sveltejs/kit';
 
 /**
- * Helpers for the public API (`/api/...`) that client apps call. Like PocketBase, the API can be
+ * Helpers for the public API (`/api/...`) that client apps call. The API can be
  * called from any origin: it uses bearer tokens, never cookies, so CORS can't leak a session.
  */
 

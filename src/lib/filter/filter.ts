@@ -1,5 +1,5 @@
 /**
- * Filter expressions in PocketBase syntax, used by `?filter=` of the records API and by the API
+ * Filter expressions, used by `?filter=` of the records API and by the API
  * rules of a collection:
  *
  * ```

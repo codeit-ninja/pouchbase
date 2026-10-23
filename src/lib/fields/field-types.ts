@@ -1,6 +1,6 @@
 /**
  * Field types of a collection. Each type maps onto one of D1's (SQLite's) storage classes and adds
- * its own meaning and validation on top, similar to PocketBase.
+ * its own meaning and validation on top.
  *
  * Shared between the client (forms, icons) and the server (column definitions).
  */

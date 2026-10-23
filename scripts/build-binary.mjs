@@ -1,5 +1,5 @@
 /**
- * Builds Pouchbase as a single executable for the current platform, like PocketBase:
+ * Builds Pouchbase as a single executable for the current platform:
  * `pnpm build:binary` (which runs `pnpm build:node` first) writes `dist/pouchbase-<os>-<arch>`.
  * Requires Node 26; the binary contains that same Node runtime (a Node single executable
  * application, https://nodejs.org/api/single-executable-applications.html).

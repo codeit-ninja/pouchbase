@@ -88,7 +88,7 @@ export const oauthProviders = sqliteTable('oauth_providers', {
 });
 
 /**
- * A pending OAuth sign-in of an app user (popup flow, like PocketBase). The app proves it started
+ * A pending OAuth sign-in of an app user (popup flow). The app proves it started
  * the sign-in with its own PKCE verifier before it receives the token.
  */
 export const oauthRequests = sqliteTable('oauth_requests', {

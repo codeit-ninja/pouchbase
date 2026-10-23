@@ -11,7 +11,7 @@
  * It also calls `POST /internal/tick` once a minute, which runs scheduled backups (the Worker uses a
  * Cron Trigger for this instead).
  *
- * Commands, like PocketBase: `serve` (the default) and `version`; `--help` lists the flags. Flags
+ * Commands: `serve` (the default) and `version`; `--help` lists the flags. Flags
  * override the environment, and a `.env` file in the working directory is read if there is one.
  *
  * Variables: ORIGIN, HOST (default 0.0.0.0), PORT (default 3000), SHUTDOWN_TIMEOUT (seconds,

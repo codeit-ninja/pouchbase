@@ -8,7 +8,7 @@ import { database } from '../platform';
  * Raw queries on the platform's databases (see `../platform`).
  *
  * - `pouchbase`: the system database (users, sessions, settings), queried via `rawQuery`.
- * - the app database: holds the data of the app built on Pouchbase (like PocketBase's data store).
+ * - the app database: holds the data of the app built on Pouchbase.
  *   It gets a random name; its id and name are stored in the system database's settings.
  */
 
