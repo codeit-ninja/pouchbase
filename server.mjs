@@ -34,6 +34,7 @@ Commands:
 
 Flags for serve:
   --http <host:port>   Address to listen on (default 0.0.0.0:3000, or HOST and PORT)
+  --port <port>        Port to listen on, keeping the host (default 3000, or PORT)
   --origin <url>       Public URL of this instance, used for redirects and OAuth callbacks (ORIGIN)
   --env-file <path>    Read environment variables from this file (default .env, if it exists)
   -h, --help           Show this help
@@ -45,6 +46,7 @@ const { values: flags, positionals } = parseArgs({
 	allowPositionals: true,
 	options: {
 		http: { type: 'string' },
+		port: { type: 'string' },
 		origin: { type: 'string' },
 		'env-file': { type: 'string' },
 		help: { type: 'boolean', short: 'h' },
@@ -87,13 +89,23 @@ if (flags.http) {
 	process.env.PORT = flags.http.slice(separator + 1);
 }
 
+if (flags.port) {
+	process.env.PORT = flags.port;
+}
+
 if (flags.origin) {
 	process.env.ORIGIN = flags.origin;
 }
 
 const origin = process.env.ORIGIN ? new URL(process.env.ORIGIN) : null;
-const host = process.env.HOST ?? '0.0.0.0';
-const port = Number(process.env.PORT ?? 3000);
+const host = process.env.HOST || '0.0.0.0';
+const port = Number(process.env.PORT || 3000);
+
+if (!Number.isInteger(port) || port < 0 || port > 65535) {
+	console.error(`Invalid port "${process.env.PORT}", expected a number from 0 to 65535`);
+	process.exit(1);
+}
+
 const shutdownTimeout = Number(process.env.SHUTDOWN_TIMEOUT ?? 30) * 1000;
 
 process.env.PROTOCOL_HEADER ??= 'x-forwarded-proto';

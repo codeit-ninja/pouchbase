@@ -108,7 +108,7 @@ chmod +x pouchbase-linux-x64
 ./pouchbase-linux-x64 serve --http=0.0.0.0:8090 --origin=https://pouchbase.example.com
 ```
 
-The binary reads `.env` from the working directory (or the file passed with `--env-file`), so put `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` there or in the environment. `--http` and `--origin` override `HOST`, `PORT` and `ORIGIN`; the other variables from the table above apply as well. Run `pouchbase --help` for all flags. On Linux the binary needs `libatomic1`, which most distributions install by default (on minimal images such as `debian:slim`, install it with `apt-get install libatomic1`).
+The binary reads `.env` from the working directory (or the file passed with `--env-file`), so put `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` there or in the environment. `--http`, `--port` and `--origin` override `HOST`, `PORT` and `ORIGIN` (`--port=3001` changes only the port); the other variables from the table above apply as well. Run `pouchbase --help` for all flags. On Linux the binary needs `libatomic1`, which most distributions install by default (on minimal images such as `debian:slim`, install it with `apt-get install libatomic1`).
 
 To build a binary for your own platform, run `pnpm build:binary` with Node 26; it is written to `dist/`.
 
