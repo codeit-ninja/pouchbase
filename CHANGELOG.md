@@ -1,5 +1,15 @@
 # pouchbase
 
+## 0.3.0
+
+### Minor Changes
+
+- [`58ab82d`](https://github.com/pouchbase/pouchbase/commit/58ab82d2ec81c175c5b60d7f4754f32b8c0cde80) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - **Breaking:** the records API returns real values: booleans as `true`/`false`, JSON fields parsed, and multiple relations, files and lists as arrays (`[]` when empty), and `/api/auth/me` returns the user in the same shape. `?fields=id,title` returns only some fields. The generated types follow, with a `<Name>Create` type per collection and a `Schema` for the SDK.
+
+### Patch Changes
+
+- [`d80a87a`](https://github.com/pouchbase/pouchbase/commit/d80a87a317b9f68345a5450dfde65f5eb1160d5d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add a `--port` flag to the Node server and the single binary, next to `PORT` in the environment or `.env`.
+
 ## 0.2.0
 
 ### Minor Changes
