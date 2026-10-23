@@ -1,5 +1,18 @@
 # pouchbase-site
 
+## 0.3.0
+
+### Minor Changes
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add accounts and the public plugin registry: sign up with a password or GitHub, publish plugins by uploading a bundle or with `pouchbase-plugin publish` and a publish token, and serve them to every Pouchbase through the registry API under `/v1`.
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add a documentation section at `/docs`: a getting started guide that lets you choose how to self-host and then walks through Cloudflare Workers, Docker (including the VPS install script) or the single binary, and guides for authentication, collections and records, realtime, functions and email templates.
+
+### Patch Changes
+
+- Updated dependencies [[`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d), [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d), [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d), [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d)]:
+  - @pouchbasejs/js-sdk@0.4.0
+
 ## 0.2.2
 
 ### Patch Changes
