@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource-variable/figtree';
+@import '@fontsource-variable/jetbrains-mono';
 @plugin '@tailwindcss/typography';
 
 @theme {
@@ -6,9 +9,43 @@
 	--spacing-control: --spacing(10);
 	/* Shared height for the sidebar header and the top header, so their borders line up. */
 	--spacing-header: --spacing(14);
+
+	/* Figtree for text and UI, Bricolage Grotesque for headlines, JetBrains Mono for code. */
+	--font-sans: 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-display: 'Bricolage Grotesque Variable', 'Figtree Variable', ui-sans-serif, sans-serif;
+	--font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Mono', monospace;
+
+	/* Brand orange, taken from the logo gradient (#FBAD41 → #F6821F). */
+	--color-brand-50: #fff6eb;
+	--color-brand-100: #ffe8cc;
+	--color-brand-200: #ffd199;
+	--color-brand-300: #fdbd66;
+	--color-brand-400: #fbad41;
+	--color-brand-500: #f6821f;
+	--color-brand-600: #dd6f13;
+	--color-brand-700: #b8590f;
+	--color-brand-800: #8f440d;
+	--color-brand-900: #6b330b;
 }
 
 @layer base {
+	html {
+		/* Keep anchor targets clear of the sticky header. */
+		scroll-padding-top: --spacing(20);
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		html {
+			scroll-behavior: smooth;
+		}
+	}
+
+	body {
+		background-color: white;
+		color: var(--color-zinc-900);
+		-webkit-font-smoothing: antialiased;
+	}
+
 	/* Tailwind v4 no longer sets a pointer cursor on buttons; every clickable element gets one. */
 	button,
 	[role='button'],

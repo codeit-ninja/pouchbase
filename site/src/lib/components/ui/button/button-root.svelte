@@ -1,7 +1,7 @@
 <script module lang="ts">
 	import { Button } from 'bits-ui';
 
-	export type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+	export type Variant = 'primary' | 'brand' | 'secondary' | 'ghost' | 'danger';
 
 	export type Size = 'default' | 'icon';
 
@@ -39,6 +39,8 @@
 	const variants = {
 		primary:
 			'border-transparent bg-zinc-900 text-white hover:bg-zinc-700 focus-visible:outline-zinc-900',
+		brand:
+			'border-transparent bg-brand-500 text-white hover:bg-brand-600 focus-visible:outline-brand-500',
 		secondary:
 			'border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-100 focus-visible:outline-zinc-400',
 		ghost:
@@ -74,7 +76,7 @@
 	aria-busy={busy || undefined}
 	onclick={handleClick}
 	class={[
-		'inline-flex h-control cursor-pointer items-center justify-center gap-2 rounded-md border text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 aria-busy:cursor-progress aria-busy:opacity-100 [&_svg]:size-4 [&_svg]:shrink-0',
+		'inline-flex h-control cursor-pointer items-center justify-center gap-2 rounded-md border text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 aria-busy:cursor-progress aria-busy:opacity-100 [&_svg]:size-4 [&_svg]:shrink-0',
 		variants[variant],
 		sizes[size],
 		className

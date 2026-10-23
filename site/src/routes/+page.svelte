@@ -1,8 +1,17 @@
 <script lang="ts">
-	import * as Logo from '#lib/components/ui/logo/index.js';
+	import Features from './features.svelte';
+	import Hero from './hero.svelte';
+	import SelfHosting from './self-hosting.svelte';
 </script>
 
-<main class="flex min-h-dvh flex-col items-center justify-center gap-4">
-	<Logo.Root class="size-16" />
-	<h1 class="text-3xl font-semibold">Pouchbase</h1>
-</main>
+<svelte:head>
+	<title>Pouchbase · The open-source backend for Cloudflare Workers</title>
+	<meta
+		name="description"
+		content="Pouchbase is an open-source backend for Cloudflare Workers, D1 and R2, inspired by PocketBase. Collections, users, OAuth sign-in and file storage on your own Cloudflare account."
+	/>
+</svelte:head>
+
+<Hero />
+<Features />
+<SelfHosting />
