@@ -1,5 +1,33 @@
 # pouchbase
 
+## 0.6.0
+
+### Minor Changes
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Admins sign in with their email address and password; usernames and the app name are gone, so installing is one step. With `POUCHBASE_ADMIN_EMAIL` and `POUCHBASE_ADMIN_PASSWORD` set, Pouchbase installs itself on the first request, without the install page.
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add a collections API (`/api/collections`, for API keys with the service scope) to create, change and delete collections with their fields, indexes and API rules, and export and import collections as a JSON file, also from the new menu next to Collections in the admin.
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add email templates: design emails with variables (`{{name}}`, fallbacks, `#if` and `#each`) on the new Mail page, in a visual editor with styled buttons, images, sections, columns, spacers and dividers or as HTML, preview them with sample data, and send them from functions or your back-end through `POST /api/mail/send` with an API key. API keys are managed on the new API keys page (keys with the service scope also use the records API without API rules), every function gets its own as `env.POUCHBASE_API_KEY`, and the verification and password-reset emails can now be customized.
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add environments: mark an instance as development or production, link a development instance to production with a deploy token, and publish collections, functions, plugins and settings to it (or pull them from it) from the new Environments page. Every publish shows its plan first, asks before it removes data, and makes a backup first when a backup destination exists.
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add `?expand=` to the records API: `?expand=author,comments.author` returns relation and file fields as the records they point to instead of ids, up to three levels deep, filtered by the view rule of each related collection. Realtime subscriptions take `expand` too. The generated `Schema` now lists the collection each relation points to (`$relations`).
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add `install.sh`, which installs Pouchbase on a Linux server in one command: it installs Docker, asks for and checks the Cloudflare credentials, and starts Pouchbase with Docker Compose, behind Caddy with HTTPS when you give it a domain name.
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add realtime: apps follow the creates, updates and deletes of a collection's records, or of one record, over a WebSocket at `/api/realtime`, filtered by the collection's view rule and an optional filter. On Workers each collection's connections live in a Durable Object (`RealtimeHub`); on Node the server holds them. The dashboard's records grid updates live too.
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Show the version of Pouchbase at the bottom of the sidebar, with an update button when GitHub has a newer release. On Cloudflare Workers the update deploys the new version to the Worker itself, keeping its databases and secrets; the single binary replaces itself and restarts; Docker and Node installations get the commands to run.
+
+### Patch Changes
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - API errors from before a route runs, such as "not installed yet", now carry the CORS headers, so apps on other origins see the message instead of a network error.
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Make a first start on Workers recover when it is cut off halfway: each database migration runs as one transaction, a field whose column was left behind takes it over instead of failing with `CREATE_FIELD_FAILED`, and the log explains when the Worker is deployed under another name than its `POUCHBASE_INSTANCE` (which keeps it from adding its D1 bindings).
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Fix the Worker ignoring its D1 bindings and cutting off work that runs after a response (adding the bindings, verification emails): SvelteKit 3 no longer passes the Cloudflare platform to requests, so the Worker now reads its bindings from `cloudflare:workers`. Queries on Workers go through the bindings again instead of the slower D1 HTTP API.
+
 ## 0.5.0
 
 ### Minor Changes

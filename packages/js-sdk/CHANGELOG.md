@@ -1,5 +1,17 @@
 # @pouchbasejs/js-sdk
 
+## 0.4.0
+
+### Minor Changes
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add `pb.collections` to manage collections, their fields, indexes and API rules with a service API key, and to export and import them.
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add `include` to record reads, `insert()`, `patch()` and `subscribe()`: `pb.db.posts.find(id, { include: { author: true } })` returns the related records instead of their ids, typed from the generated `Schema`, also nested (`{ comments: { include: { author: true } } }`).
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add `pb.mail.send()` to send email templates, an `apiKey` option for server-side code such as functions (`env.POUCHBASE_API_KEY`), and `pb.asService()` to use the records API with a service key.
+
+- [`103e69c`](https://github.com/pouchbase/pouchbase/commit/103e69c026a081c67b4697763fe51b7c6c3c8b1d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add realtime: `pb.db.<name>.subscribe()` and `pb.realtime.subscribe()` call you with every change to records you may see, with `where`, `select` and `id`, over one WebSocket per collection that reconnects by itself and follows sign-ins.
+
 ## 0.3.0
 
 ### Minor Changes
