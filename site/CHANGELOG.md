@@ -1,5 +1,11 @@
 # pouchbase-site
 
+## 0.2.0
+
+### Minor Changes
+
+- [`46c886b`](https://github.com/pouchbase/pouchbase/commit/46c886b5281df2a34977b6bb5405968212a691b3) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add a documentation section at `/docs`, starting with a getting started guide for self-hosting on Cloudflare Workers, with Docker or as a single binary.
+
 ## 0.1.0
 
 ### Minor Changes
