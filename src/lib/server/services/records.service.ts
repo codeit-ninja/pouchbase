@@ -1,8 +1,10 @@
-import type { ServiceError } from './base.service';
+import type { ErrorOf, ServiceError } from './base.service';
 import type { Collection } from './collections.service';
 import type { Field } from './fields.service';
 import type { SignInMethod } from '#lib/auth/sign-in-methods.js';
 import type { FieldOptions } from '#lib/fields/field-types.js';
+import type { ApiRuleAction } from '#lib/filter/rules.js';
+import type { SqlCondition } from '../filter';
 import type { ResultAsync } from 'neverthrow';
 
 import { asc, inArray } from 'drizzle-orm';
@@ -11,9 +13,12 @@ import { errAsync, fromPromise, okAsync } from 'neverthrow';
 import { idGenerator, isAutoType, isRelationType, NOW_DEFAULT } from '#lib/fields/field-types.js';
 import { sqlDefaultSelect } from '#lib/fields/sql-expression.js';
 import { fileFieldRules } from '#lib/files/accept.js';
+import { FilterError } from '#lib/filter/filter.js';
+import { apiActions, protectedApiFields } from '#lib/filter/rules.js';
 
 import { ComputeError, computedSpecs, createComputer, fillComputedColumns } from '../computed';
 import { batchDatabase, queryDatabase, queryObjects } from '../db/query';
+import { ALWAYS, both, compileFilter, compileRule, compileSort } from '../filter';
 import { generateId } from '../crypto';
 import { USERS_COLLECTION } from './auth.service';
 import { FILES_COLLECTION } from '#lib/files/files.js';
@@ -76,6 +81,43 @@ type InvalidRecordError = ServiceError<8001, 'INVALID_RECORD'> & { data: { issue
 type UniqueViolationError = ServiceError<8002, 'UNIQUE_VIOLATION'> & { data: { field: string } };
 
 type RecordContext = { collection: Collection; fields: Field[]; databaseId: string };
+
+/**
+ * Who calls the records API: the signed-in user (a row of `users`) or `null`. Record operations
+ * that get an `access` check the collection's API rule for it; without one (the dashboard) every
+ * record is reachable.
+ */
+export type ApiAccess = { auth: Record<string, unknown> | null };
+
+/** A record as the records API returns it: the stored value of every field except blobs. */
+export type ApiRecord = Record<string, string | number | null>;
+
+export type ApiListOptions = {
+	page: number;
+	perPage: number;
+	/** PocketBase syntax: `-created_at,title`. */
+	sort?: string;
+	/** A filter expression, see `#lib/filter/filter.ts`. */
+	filter?: string;
+};
+
+export type ApiRecordList = {
+	page: number;
+	perPage: number;
+	totalItems: number;
+	totalPages: number;
+	items: ApiRecord[];
+};
+
+type GuardError =
+	| ServiceError<8013, 'ACTION_NOT_AVAILABLE'>
+	| ServiceError<8014, 'RULE_LOCKED'>
+	| (ServiceError<8016, 'INVALID_RULE'> & { data: { action: ApiRuleAction; message: string } })
+	| InvalidRecordError;
+
+type InvalidQueryError = ServiceError<8015, 'INVALID_QUERY'> & {
+	data: { param: 'filter' | 'sort'; message: string };
+};
 
 type ContextError =
 	| ServiceError<1004, 'APP_DATABASE_MISSING'>
@@ -178,7 +220,8 @@ function parseValue(
 		return field.required ? { error: 'Required' } : { value: null };
 	}
 
-	const text = String(raw);
+	// The API may send JSON fields as values instead of JSON text.
+	const text = field.type === 'json' && typeof raw !== 'string' ? JSON.stringify(raw) : String(raw);
 
 	switch (field.type) {
 		case 'number': {
@@ -257,6 +300,18 @@ function toRecord(collectionFields: Field[], row: unknown[]) {
 		...Object.fromEntries(collectionFields.map((field, index) => [field.name, row[index + 1]])),
 		_key: String(row[0])
 	} as RecordRow;
+}
+
+/** The fields the records API reads and filters on: all but blobs, which can be large. */
+function apiFields(collectionFields: Field[]) {
+	return collectionFields.filter((field) => field.type !== 'blob');
+}
+
+/** A selected row of `apiFields` as an API record. */
+function toApiRecord(collectionFields: Field[], row: unknown[]) {
+	return Object.fromEntries(
+		apiFields(collectionFields).map((field, index) => [field.name, row[index] ?? null])
+	) as ApiRecord;
 }
 
 function columnExpression(field: Pick<Field, 'name' | 'type'>) {
@@ -406,6 +461,142 @@ export class RecordsService extends Service {
 		);
 	}
 
+	/**
+	 * One page of records for the records API, filtered by `options.filter` and by the collection's
+	 * list rule: records the rule doesn't match are left out.
+	 */
+	apiList(
+		collectionName: string,
+		options: ApiListOptions,
+		access: ApiAccess
+	): ResultAsync<
+		ApiRecordList,
+		ContextError | GuardError | InvalidQueryError | ServiceError<8000, 'LIST_RECORDS_FAILED'>
+	> {
+		return this.context(collectionName).andThen((context) =>
+			this.guard(context, 'list', access).andThen((rule) => {
+				const { collection, fields: collectionFields, databaseId } = context;
+				const readable = apiFields(collectionFields);
+				const { key, created } = autoFields(collectionFields);
+
+				// Without fields the collection has no table yet.
+				if (!collectionFields.length) {
+					return okAsync({ ...options, totalItems: 0, totalPages: 0, items: [] });
+				}
+
+				return this.compileQuery('filter', () =>
+					options.filter?.trim()
+						? both(rule, compileFilter(options.filter, readable, access))
+						: rule
+				).andThen((where) =>
+					this.compileQuery('sort', () => compileSort(options.sort ?? '', readable)).andThen(
+						(sort) => {
+							// Without a sort, records come in the order they were created.
+							const order = [
+								...(sort.length ? sort : [`"${created[0] ?? key}" ASC`]),
+								`"${key}" ASC`
+							];
+							const columns = readable.map((field) => `"${field.name}"`).join(', ');
+
+							return fromPromise(
+								batchDatabase(databaseId, [
+									{
+										sql: `SELECT count(*) FROM "${collection.name}" WHERE ${where.sql}`,
+										params: where.params
+									},
+									{
+										sql: `SELECT ${columns} FROM "${collection.name}" WHERE ${where.sql} ORDER BY ${order.join(', ')} LIMIT ? OFFSET ?`,
+										params: [...where.params, options.perPage, (options.page - 1) * options.perPage]
+									}
+								]),
+								(error) => this.error(8000, 'LIST_RECORDS_FAILED', error)
+							).map(([[total], rows]) => {
+								const totalItems = Number(total?.[0] ?? 0);
+
+								return {
+									page: options.page,
+									perPage: options.perPage,
+									totalItems,
+									totalPages: Math.ceil(totalItems / options.perPage),
+									items: rows.map((row) => toApiRecord(collectionFields, row))
+								} satisfies ApiRecordList;
+							});
+						}
+					)
+				);
+			})
+		);
+	}
+
+	/**
+	 * One record for the records API; `null` when it doesn't exist or the collection's view rule
+	 * doesn't match it. Without `access`, the rule isn't checked.
+	 */
+	apiGet(
+		collectionName: string,
+		id: string,
+		access?: ApiAccess
+	): ResultAsync<
+		ApiRecord | null,
+		ContextError | GuardError | ServiceError<8011, 'GET_RECORD_FAILED'>
+	> {
+		return this.context(collectionName).andThen((context) =>
+			this.guard(context, 'view', access).andThen((rule) => {
+				const { collection, fields: collectionFields, databaseId } = context;
+				const { key } = autoFields(collectionFields);
+
+				if (!collectionFields.length) {
+					return okAsync(null);
+				}
+
+				const columns = apiFields(collectionFields).map((field) => `"${field.name}"`);
+
+				return fromPromise(
+					queryDatabase(
+						databaseId,
+						`SELECT ${columns.join(', ')} FROM "${collection.name}" WHERE "${key}" = ? AND (${rule.sql})`,
+						[...keyParams(key, [id]), ...rule.params]
+					),
+					(error) => this.error(8011, 'GET_RECORD_FAILED', error)
+				).map(([row]) => (row ? toApiRecord(collectionFields, row) : null));
+			})
+		);
+	}
+
+	/** Creates a record through the records API (see `create`) and returns it. */
+	apiCreate(
+		collectionName: string,
+		input: RecordInput,
+		access: ApiAccess
+	): ResultAsync<
+		ApiRecord,
+		| ErrorOf<ReturnType<RecordsService['create']>>
+		| ErrorOf<ReturnType<RecordsService['apiGet']>>
+		| ServiceError<8003, 'RECORD_NOT_FOUND'>
+	> {
+		return this.create(collectionName, input, { access }).andThen(({ id }) =>
+			this.found(collectionName, id)
+		);
+	}
+
+	/**
+	 * Updates the fields in `input` of a record through the records API (see `update`) and returns
+	 * the record.
+	 */
+	apiUpdate(
+		collectionName: string,
+		id: string,
+		input: RecordInput,
+		access: ApiAccess
+	): ResultAsync<
+		ApiRecord,
+		ErrorOf<ReturnType<RecordsService['update']>> | ErrorOf<ReturnType<RecordsService['apiGet']>>
+	> {
+		return this.update(collectionName, id, input, { partial: true, access }).andThen(() =>
+			this.found(collectionName, id)
+		);
+	}
+
 	/** Records of a collection to pick from in a relation field. */
 	listOptions(
 		collectionId: string
@@ -483,9 +674,14 @@ export class RecordsService extends Service {
 		);
 	}
 
+	/**
+	 * Creates a record. With `access` (the records API), the collection's create rule must allow
+	 * it; the rule sees the new record's values.
+	 */
 	create(
 		collectionName: string,
-		input: RecordInput
+		input: RecordInput,
+		options: { access?: ApiAccess } = {}
 	): ResultAsync<
 		{ id: string },
 		| ServiceError<1004, 'APP_DATABASE_MISSING'>
@@ -497,9 +693,13 @@ export class RecordsService extends Service {
 		| UniqueViolationError
 		| ServiceError<8004, 'CREATE_RECORD_FAILED'>
 		| ServiceError<8012, 'NO_FIELDS'>
+		| ServiceError<8017, 'RULE_DENIED'>
+		| GuardError
 	> {
-		return this.context(collectionName).andThen(
-			({ collection, fields: collectionFields, databaseId }) =>
+		return this.context(collectionName).andThen((context) => {
+			const { collection, fields: collectionFields, databaseId } = context;
+
+			return this.guard(context, 'create', options.access, input).andThen((condition) =>
 				this.requireFields(collectionFields, this.error(8012, 'NO_FIELDS'))
 					.andThen(() =>
 						this.validate(databaseId, collectionFields, input, 8004, 'CREATE_RECORD_FAILED')
@@ -541,31 +741,55 @@ export class RecordsService extends Service {
 						// Empty values are left out, so the column's DEFAULT applies.
 						const entries = Object.entries(values).filter(([, value]) => value !== null);
 						const columns = entries.map(([name]) => `"${name}"`).join(', ');
-						const insert = entries.length
-							? `(${columns}) VALUES (${entries.map(() => '?').join(', ')})`
-							: 'DEFAULT VALUES';
+
+						if (condition === ALWAYS) {
+							const insert = entries.length
+								? `(${columns}) VALUES (${entries.map(() => '?').join(', ')})`
+								: 'DEFAULT VALUES';
+
+							return fromPromise(
+								queryDatabase(
+									databaseId,
+									`INSERT INTO "${collection.name}" ${insert} RETURNING "${key}"`,
+									entries.map(([, value]) => value)
+								),
+								(error) => this.writeError(error, 8004, 'CREATE_RECORD_FAILED')
+							).map(([[id]]) => ({ id: String(id) }));
+						}
+
+						// The rule runs on the new record: a row with every field's value, which is only
+						// inserted when it matches, in the same statement.
+						const row = apiFields(collectionFields).map((field) => field.name);
+						const target = entries.length ? `(${columns})` : '("rowid")';
+						const selected = entries.length ? columns : 'NULL';
 
 						return fromPromise(
 							queryDatabase(
 								databaseId,
-								`INSERT INTO "${collection.name}" ${insert} RETURNING "${key}"`,
-								entries.map(([, value]) => value)
+								`INSERT INTO "${collection.name}" ${target} SELECT ${selected} FROM (SELECT ${row.map((name) => `? AS "${name}"`).join(', ')}) WHERE ${condition.sql} RETURNING "${key}"`,
+								[...row.map((name) => values[name] ?? null), ...condition.params]
 							),
 							(error) => this.writeError(error, 8004, 'CREATE_RECORD_FAILED')
-						).map(([[id]]) => ({ id: String(id) }));
+						).andThen((rows) =>
+							rows.length
+								? okAsync({ id: String(rows[0][0]) })
+								: errAsync(this.error(8017, 'RULE_DENIED'))
+						);
 					})
-		);
+			);
+		});
 	}
 
 	/**
 	 * Updates a record. With `partial`, only the fields present in `input` are written; otherwise
-	 * missing fields are cleared.
+	 * missing fields are cleared. With `access` (the records API), the collection's update rule
+	 * must match the stored record, or it counts as not found.
 	 */
 	update(
 		collectionName: string,
 		id: string,
 		input: RecordInput,
-		options: { partial?: boolean } = {}
+		options: { partial?: boolean; access?: ApiAccess } = {}
 	): ResultAsync<
 		{ id: string },
 		| ServiceError<1004, 'APP_DATABASE_MISSING'>
@@ -577,9 +801,12 @@ export class RecordsService extends Service {
 		| UniqueViolationError
 		| ServiceError<8003, 'RECORD_NOT_FOUND'>
 		| ServiceError<8005, 'UPDATE_RECORD_FAILED'>
+		| GuardError
 	> {
-		return this.context(collectionName).andThen(
-			({ collection, fields: collectionFields, databaseId }) =>
+		return this.context(collectionName).andThen((context) => {
+			const { collection, fields: collectionFields, databaseId } = context;
+
+			return this.guard(context, 'update', options.access, input).andThen((condition) =>
 				this.requireFields(collectionFields, this.error(8003, 'RECORD_NOT_FOUND'))
 					.andThen(() =>
 						this.validate(
@@ -623,27 +850,34 @@ export class RecordsService extends Service {
 						const { key } = autoFields(collectionFields);
 						const entries = Object.entries(values);
 						const assignments = entries.map(([name]) => `"${name}" = ?`).join(', ');
+						const where = `"${key}" = ? AND (${condition.sql})`;
 
 						return fromPromise(
 							queryDatabase(
 								databaseId,
 								// Nothing to write (no fields left to save): only check that the record exists.
 								entries.length
-									? `UPDATE "${collection.name}" SET ${assignments} WHERE "${key}" = ? RETURNING "${key}"`
-									: `SELECT "${key}" FROM "${collection.name}" WHERE "${key}" = ?`,
-								[...entries.map(([, value]) => value), ...keyParams(key, [id])]
+									? `UPDATE "${collection.name}" SET ${assignments} WHERE ${where} RETURNING "${key}"`
+									: `SELECT "${key}" FROM "${collection.name}" WHERE ${where}`,
+								[...entries.map(([, value]) => value), ...keyParams(key, [id]), ...condition.params]
 							),
 							(error) => this.writeError(error, 8005, 'UPDATE_RECORD_FAILED')
 						).andThen((rows) =>
 							rows.length ? okAsync({ id }) : errAsync(this.error(8003, 'RECORD_NOT_FOUND'))
 						);
 					})
-		);
+			);
+		});
 	}
 
+	/**
+	 * Deletes records. With `access` (the records API), only those that match the collection's
+	 * delete rule are deleted.
+	 */
 	delete(
 		collectionName: string,
-		ids: string[]
+		ids: string[],
+		options: { access?: ApiAccess } = {}
 	): ResultAsync<
 		{ deleted: number },
 		| ServiceError<1004, 'APP_DATABASE_MISSING'>
@@ -652,6 +886,7 @@ export class RecordsService extends Service {
 		| ServiceError<6006, 'COLLECTION_NOT_FOUND'>
 		| ServiceError<7000, 'LIST_FIELDS_FAILED'>
 		| ServiceError<8006, 'DELETE_RECORDS_FAILED'>
+		| GuardError
 	> {
 		const unique = [...new Set(ids)].slice(0, MAX_IDS);
 
@@ -659,8 +894,10 @@ export class RecordsService extends Service {
 			return okAsync({ deleted: 0 });
 		}
 
-		return this.context(collectionName).andThen(
-			({ collection, fields: collectionFields, databaseId }) =>
+		return this.context(collectionName).andThen((context) => {
+			const { collection, fields: collectionFields, databaseId } = context;
+
+			return this.guard(context, 'delete', options.access).andThen((condition) =>
 				fromPromise(
 					(async () => {
 						const { key } = autoFields(collectionFields);
@@ -669,53 +906,57 @@ export class RecordsService extends Service {
 							return { deleted: 0 };
 						}
 
-						const placeholders = unique.map(() => '?').join(', ');
 						const isFiles = collection.system && collection.name === FILES_COLLECTION;
-						const keys = isFiles
-							? (
-									await queryDatabase(
-										databaseId,
-										`SELECT "key", "thumbnails" FROM "files" WHERE "id" IN (${placeholders})`,
-										unique
-									)
-								).flatMap(([key, thumbnails]) =>
-									// The original and every stored thumbnail.
-									storageKeys({ key: String(key), thumbnails: parseThumbnailList(thumbnails) })
+						const stored = isFiles
+							? await queryDatabase(
+									databaseId,
+									`SELECT "id", "key", "thumbnails" FROM "files" WHERE "id" IN (${unique.map(() => '?').join(', ')})`,
+									unique
 								)
 							: [];
 						const params = keyParams(key, unique);
 						const rows = params.length
 							? await queryDatabase(
 									databaseId,
-									`DELETE FROM "${collection.name}" WHERE "${key}" IN (${params.map(() => '?').join(', ')}) RETURNING "${key}"`,
-									params
+									`DELETE FROM "${collection.name}" WHERE "${key}" IN (${params.map(() => '?').join(', ')}) AND (${condition.sql}) RETURNING "${key}"`,
+									[...params, ...condition.params]
 								)
 							: [];
+						const deleted = rows.map(([id]) => String(id));
+						const placeholders = deleted.map(() => '?').join(', ');
 
 						// Deleted users lose their linked provider accounts too.
-						if (collection.system && collection.name === USERS_COLLECTION) {
-							await queryDatabase(
-								databaseId,
-								`DELETE FROM "_external_auths" WHERE "user_id" IN (${placeholders})`,
-								unique
-							);
-							await queryDatabase(
-								databaseId,
-								`DELETE FROM "_passwords" WHERE "user_id" IN (${placeholders})`,
-								unique
-							);
+						if (deleted.length && collection.system && collection.name === USERS_COLLECTION) {
+							await batchDatabase(databaseId, [
+								{
+									sql: `DELETE FROM "_external_auths" WHERE "user_id" IN (${placeholders})`,
+									params: deleted
+								},
+								{
+									sql: `DELETE FROM "_passwords" WHERE "user_id" IN (${placeholders})`,
+									params: deleted
+								}
+							]);
 						}
 
-						// Deleted files are removed from storage too; leftovers don't break anything.
+						// Deleted files are removed from storage too (the original and every stored
+						// thumbnail); leftovers don't break anything.
+						const keys = stored
+							.filter(([id]) => deleted.includes(String(id)))
+							.flatMap(([, key, thumbnails]) =>
+								storageKeys({ key: String(key), thumbnails: parseThumbnailList(thumbnails) })
+							);
+
 						if (keys.length) {
 							await this.services.storage().delete(keys);
 						}
 
-						return { deleted: rows.length };
+						return { deleted: deleted.length };
 					})(),
 					(error) => this.error(8006, 'DELETE_RECORDS_FAILED', error)
 				)
-		);
+			);
+		});
 	}
 
 	/**
@@ -931,6 +1172,88 @@ export class RecordsService extends Service {
 					})
 				: okAsync(filled);
 		});
+	}
+
+	/** A record that was just written, as the API returns it. */
+	private found(
+		collectionName: string,
+		id: string
+	): ResultAsync<
+		ApiRecord,
+		ErrorOf<ReturnType<RecordsService['apiGet']>> | ServiceError<8003, 'RECORD_NOT_FOUND'>
+	> {
+		return this.apiGet(collectionName, id).andThen((record) =>
+			record ? okAsync(record) : errAsync(this.error(8003, 'RECORD_NOT_FOUND'))
+		);
+	}
+
+	/**
+	 * The SQL condition of the collection's API rule for `action`, for a request with `access`;
+	 * without `access` (the dashboard), every record. Fails when the API doesn't offer the action
+	 * for this collection, when the rule is locked or invalid, or when `input` writes a protected
+	 * field.
+	 */
+	private guard(
+		{ collection, fields: collectionFields }: RecordContext,
+		action: ApiRuleAction,
+		access: ApiAccess | undefined,
+		input?: RecordInput
+	): ResultAsync<SqlCondition, GuardError> {
+		if (!access) {
+			return okAsync(ALWAYS);
+		}
+
+		if (!apiActions(collection).includes(action)) {
+			return errAsync(this.error(8013, 'ACTION_NOT_AVAILABLE'));
+		}
+
+		const written = protectedApiFields(collection).filter((name) => input && name in input);
+
+		if (written.length) {
+			return errAsync<never, InvalidRecordError>({
+				code: 8001,
+				message: 'INVALID_RECORD',
+				data: {
+					issues: Object.fromEntries(
+						written.map((name) => [name, "Can't be changed through the records API"])
+					)
+				}
+			});
+		}
+
+		let condition: SqlCondition | null;
+
+		try {
+			condition = compileRule(collection.settings.rules?.[action], apiFields(collectionFields), {
+				auth: access.auth,
+				body: input
+			});
+		} catch (error) {
+			return errAsync({
+				...this.error(8016, 'INVALID_RULE'),
+				data: { action, message: error instanceof Error ? error.message : String(error) }
+			});
+		}
+
+		return condition ? okAsync(condition) : errAsync(this.error(8014, 'RULE_LOCKED'));
+	}
+
+	/** Runs `compile` for a query parameter; a `FilterError` becomes an `INVALID_QUERY`. */
+	private compileQuery<T>(
+		param: 'filter' | 'sort',
+		compile: () => T
+	): ResultAsync<T, InvalidQueryError> {
+		try {
+			return okAsync(compile());
+		} catch (error) {
+			return errAsync({
+				...this.error(8015, 'INVALID_QUERY'),
+				data: {
+					param,
+					message: error instanceof FilterError ? error.message : `Invalid ${param}`
+				}
+			});
+		}
 	}
 
 	/** Fails with `error` when the collection has no fields, and so no table yet. */

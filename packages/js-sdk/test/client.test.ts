@@ -1,6 +1,13 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
-import { AuthStore, Pouchbase, PouchbaseError, fetchTypes, isTokenValid } from '../src/index.js';
+import {
+	AuthStore,
+	Pouchbase,
+	PouchbaseError,
+	fetchTypes,
+	filter,
+	isTokenValid
+} from '../src/index.js';
 import type { User } from '../src/index.js';
 
 type Call = { url: string; init: RequestInit };
@@ -189,6 +196,139 @@ describe('functions', () => {
 			status: 401,
 			message: 'Sign in to call this function'
 		});
+	});
+});
+
+describe('records', () => {
+	const page = (items: unknown[], pageNumber = 1, totalPages = 1) => ({
+		page: pageNumber,
+		perPage: 2,
+		totalItems: items.length,
+		totalPages,
+		items
+	});
+
+	it('lists records with a page, sort and filter', async () => {
+		const { fetch, calls } = mockFetch([200, page([{ id: 'p1' }])]);
+		const pb = new Pouchbase('https://pb.example.com', { fetch });
+
+		const result = await pb
+			.collection('posts')
+			.getList(2, 10, { sort: '-created_at', filter: 'status = "published"' });
+
+		expect(result.items).toEqual([{ id: 'p1' }]);
+
+		const url = new URL(calls[0]!.url);
+
+		expect(url.pathname).toBe('/api/collections/posts/records');
+		expect(Object.fromEntries(url.searchParams)).toEqual({
+			page: '2',
+			perPage: '10',
+			sort: '-created_at',
+			filter: 'status = "published"'
+		});
+	});
+
+	it('fetches every page for getFullList()', async () => {
+		const { fetch, calls } = mockFetch(
+			[200, page([{ id: 'a' }, { id: 'b' }], 1, 2)],
+			[200, page([{ id: 'c' }], 2, 2)]
+		);
+		const pb = new Pouchbase('https://pb.example.com', { fetch });
+
+		await expect(pb.collection('posts').getFullList({ batch: 2 })).resolves.toEqual([
+			{ id: 'a' },
+			{ id: 'b' },
+			{ id: 'c' }
+		]);
+		expect(calls).toHaveLength(2);
+	});
+
+	it('returns null from getOne() and getFirstListItem() when nothing is found', async () => {
+		const { fetch } = mockFetch([404, { message: 'Record not found' }], [200, page([])]);
+		const pb = new Pouchbase('https://pb.example.com', { fetch });
+
+		await expect(pb.collection('posts').getOne('missing')).resolves.toBeNull();
+		await expect(pb.collection('posts').getFirstListItem('slug = "x"')).resolves.toBeNull();
+	});
+
+	it('still throws when the collection does not exist', async () => {
+		const { fetch } = mockFetch([404, { message: 'Collection not found' }]);
+		const pb = new Pouchbase('https://pb.example.com', { fetch });
+
+		await expect(pb.collection('nope').getOne('p1')).rejects.toMatchObject({ status: 404 });
+	});
+
+	it('creates, updates and deletes records with the token', async () => {
+		const { fetch, calls } = mockFetch(
+			[200, { id: 'p1', title: 'Hello' }],
+			[200, { id: 'p1', title: 'Hi' }],
+			[204]
+		);
+		const pb = new Pouchbase('https://pb.example.com', { fetch });
+		pb.authStore.save({ token: token(60), userId: 'u1', user: null });
+
+		await expect(pb.collection('posts').create({ title: 'Hello' })).resolves.toEqual({
+			id: 'p1',
+			title: 'Hello'
+		});
+		await pb.collection('posts').update('p1', { title: 'Hi' });
+		await expect(pb.collection('posts').delete('p1')).resolves.toBeUndefined();
+
+		expect(calls.map((call) => [call.init.method, new URL(call.url).pathname])).toEqual([
+			['POST', '/api/collections/posts/records'],
+			['PATCH', '/api/collections/posts/records/p1'],
+			['DELETE', '/api/collections/posts/records/p1']
+		]);
+		expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ title: 'Hi' });
+		expect(new Headers(calls[0]?.init.headers).get('authorization')).toMatch(/^Bearer /);
+	});
+
+	it('throws the issues of an invalid record', async () => {
+		const { fetch } = mockFetch([
+			400,
+			{ message: 'Invalid record', issues: { title: 'Required' } }
+		]);
+		const pb = new Pouchbase('https://pb.example.com', { fetch });
+
+		await expect(pb.collection('posts').create({})).rejects.toMatchObject({
+			status: 400,
+			issues: { title: 'Required' }
+		});
+	});
+
+	it('escapes values in filters', () => {
+		const pb = new Pouchbase('https://pb.example.com');
+
+		expect(
+			pb.filter('title ~ {:search} && views > {:views} && draft = {:draft} && a = {:none}', {
+				search: 'say "hi" \\o/',
+				views: 10,
+				draft: false,
+				none: null
+			})
+		).toBe('title ~ "say \\"hi\\" \\\\o/" && views > 10 && draft = false && a = null');
+		expect(filter('created_at > {:date}', { date: new Date(0) })).toBe(
+			'created_at > "1970-01-01T00:00:00.000Z"'
+		);
+	});
+
+	it('types the records of the collections', () => {
+		interface Collections {
+			users: User;
+			posts: { id: string; title: string };
+		}
+
+		const pb = new Pouchbase<Collections>('https://pb.example.com');
+
+		expectTypeOf(() => pb.collection('posts').getOne('p1')).returns.resolves.toEqualTypeOf<{
+			id: string;
+			title: string;
+		} | null>();
+		expectTypeOf(() => pb.collection('other').getOne('x')).returns.resolves.toEqualTypeOf<Record<
+			string,
+			unknown
+		> | null>();
 	});
 });
 

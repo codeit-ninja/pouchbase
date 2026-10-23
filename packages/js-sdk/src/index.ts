@@ -10,6 +10,14 @@ export { FilesService } from './services/files.js';
 export type { FileUrlOptions } from './services/files.js';
 export { FunctionsService } from './services/functions.js';
 export type { InvokeOptions } from './services/functions.js';
+export { filter, RecordService } from './services/records.js';
+export type {
+	BaseRecord,
+	FullListOptions,
+	ListOptions,
+	ListResult,
+	RecordInput
+} from './services/records.js';
 export { fetchTypes } from './typegen.js';
 export type { FetchTypesOptions } from './typegen.js';
 export { OAUTH_PROVIDERS } from './types.js';

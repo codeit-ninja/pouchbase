@@ -3,6 +3,8 @@ import { PouchbaseError } from './error.js';
 import { AuthService } from './services/auth.js';
 import { FilesService } from './services/files.js';
 import { FunctionsService } from './services/functions.js';
+import { filter, RecordService } from './services/records.js';
+import type { BaseRecord } from './services/records.js';
 import type { DefaultCollections, Issues } from './types.js';
 
 /** Options for `new Pouchbase()`. */
@@ -38,7 +40,7 @@ export type RequestOptions = {
  * ```
  *
  * Pass the `Collections` interface from `pouchbase types` to type the records of your collections:
- * `new Pouchbase<Collections>(url)`.
+ * `new Pouchbase<Collections>(url)`; `pb.collection('posts')` then returns typed records.
  */
 export class Pouchbase<C extends object = DefaultCollections> {
 	/** The instance's origin, without a trailing slash. */
@@ -62,6 +64,28 @@ export class Pouchbase<C extends object = DefaultCollections> {
 		this.auth = new AuthService<C>(this);
 		this.files = new FilesService(this);
 		this.functions = new FunctionsService(this);
+	}
+
+	/**
+	 * The records of a collection: list, view, create, update and delete them, as far as the
+	 * collection's API rules allow.
+	 *
+	 * ```ts
+	 * const posts = await pb.collection('posts').getList(1, 20, { sort: '-created_at' });
+	 * ```
+	 */
+	collection<K extends keyof C & string>(name: K): RecordService<C[K]>;
+	collection<T = BaseRecord>(name: string): RecordService<T>;
+	collection(name: string): RecordService<unknown> {
+		return new RecordService(this as Pouchbase, name);
+	}
+
+	/**
+	 * Fills `{:name}` placeholders in a filter expression with escaped values:
+	 * `pb.filter('title ~ {:search}', { search })`. See `filter()`.
+	 */
+	filter(expression: string, params: Record<string, unknown> = {}): string {
+		return filter(expression, params);
 	}
 
 	/** Absolute URL of an API path, such as `/api/health`. */

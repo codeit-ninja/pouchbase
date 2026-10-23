@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import { parseThumbnailSize, splitThumbnailSizes } from '#lib/files/thumbnails.js';
+import { FilterError, MAX_FILTER_LENGTH, parseFilter } from '#lib/filter/filter.js';
+import { API_RULE_ACTIONS } from '#lib/filter/rules.js';
 
 export const thumbnailSettingsSchema = z
 	.object({
@@ -66,3 +68,45 @@ export const imageEditsSchema = z.object({
 			.optional()
 	})
 });
+
+const ruleSchema = z.string().max(MAX_FILTER_LENGTH).default('');
+const lockedSchema = z.boolean().default(false);
+
+/**
+ * API rules of a collection: per action a rule and whether it is locked (admins only). Only the
+ * syntax is checked here; the server also checks the field names.
+ */
+export const apiRulesSchema = z
+	.object({
+		/** Collection name, sent as a hidden field. */
+		collection: z.string(),
+		list: ruleSchema,
+		listLocked: lockedSchema,
+		view: ruleSchema,
+		viewLocked: lockedSchema,
+		create: ruleSchema,
+		createLocked: lockedSchema,
+		update: ruleSchema,
+		updateLocked: lockedSchema,
+		delete: ruleSchema,
+		deleteLocked: lockedSchema
+	})
+	.superRefine((data, ctx) => {
+		for (const action of API_RULE_ACTIONS) {
+			const rule = data[action].trim();
+
+			if (data[`${action}Locked`] || !rule) {
+				continue;
+			}
+
+			try {
+				parseFilter(rule);
+			} catch (error) {
+				ctx.addIssue({
+					code: 'custom',
+					path: [action],
+					message: error instanceof FilterError ? error.message : 'Invalid rule'
+				});
+			}
+		}
+	});

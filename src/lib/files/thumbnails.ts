@@ -1,3 +1,5 @@
+import type { ApiRules } from '#lib/filter/rules.js';
+
 /**
  * Thumbnail sizes in PocketBase syntax:
  *
@@ -70,9 +72,13 @@ export type ThumbnailSettings = {
 	sizes: string[];
 };
 
-/** Settings of a collection; sections only apply to some collections (thumbnails: `files`). */
+/**
+ * Settings of a collection; some sections only apply to some collections (thumbnails: `files`).
+ * `rules` are the API rules of the records API.
+ */
 export type CollectionSettings = {
 	thumbnails?: ThumbnailSettings;
+	rules?: ApiRules;
 };
 
 /**

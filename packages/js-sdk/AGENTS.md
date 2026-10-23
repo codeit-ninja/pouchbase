@@ -22,7 +22,7 @@ The SDK is a workspace package in the Pouchbase repository; the app is at the re
 - **The app is the source of truth.** The public API lives in `../../src/routes/api/**/+server.ts` (helpers in `../../src/lib/server/api.ts`) and is documented in the _Public API_ section of `../../README.md`. Request bodies, response shapes, status codes and error messages in the SDK must match those files exactly; check them instead of guessing.
 - Shared constants (such as the OAuth providers in `../../src/lib/auth/oauth-providers.ts`) are mirrored in `src/types.ts`; keep them in sync when the app changes.
 - Only call endpoints under `/api/`. Everything else in the app (remote functions in `*.remote.ts`, admin pages) is internal and can change at any time.
-- When the API gains an endpoint (a records API is planned), add it to the SDK with a test, and update the docs in `../../site` when they cover the SDK, in the same change.
+- When the API gains an endpoint, add it to the SDK with a test, and update the docs in `../../site` when they cover the SDK, in the same change.
 - The app and the site have their own `AGENTS.md` and conventions; follow those when a change touches them.
 
 ## Public API (current)
@@ -42,6 +42,11 @@ Sign-ins return `{ token, user_id }`; the token is a JWT (HS256, 7 days) sent as
 | `GET /api/auth/oauth2/<provider>?state=…&challenge=…` | `pb.auth.signInWithOAuth()` (popup)  |
 | `POST /api/auth/oauth2/result`                        | `pb.auth.signInWithOAuth()` (polls)  |
 | `GET /api/auth/me`                                    | `pb.auth.me()`                       |
+| `GET /api/collections/<name>/records?page&perPage&sort&filter` | `pb.collection(name).getList()`, `getFullList()`, `getFirstListItem()` |
+| `GET /api/collections/<name>/records/<id>`            | `pb.collection(name).getOne()`       |
+| `POST /api/collections/<name>/records`                | `pb.collection(name).create()`       |
+| `PATCH /api/collections/<name>/records/<id>`          | `pb.collection(name).update()`       |
+| `DELETE /api/collections/<name>/records/<id>` (`204`) | `pb.collection(name).delete()`       |
 | `GET /api/files/<id>`                                 | `pb.files.url()`                     |
 | `<method> /api/functions/<name>/<path>`               | `pb.functions.invoke()`              |
 | `GET /api/types?token=…` (text, not JSON)             | `fetchTypes()`, `pouchbase types`    |

@@ -1,5 +1,8 @@
 <script module lang="ts">
-	export type Language = 'javascript' | 'typescript' | 'json' | 'sql';
+	import type { Diagnostic, FilterNames } from './code-filter';
+
+	/** `filter`: the filter syntax of API rules and `?filter=` (`#lib/filter/filter.ts`). */
+	export type Language = 'javascript' | 'typescript' | 'json' | 'sql' | 'filter';
 
 	/** A suggestion of the editor's autocomplete, also shown when hovering it in the code. */
 	export type Completion = {
@@ -28,6 +31,13 @@
 		 * hovers for functions and keywords.
 		 */
 		completions?: Completion[];
+		/** For `filter`: the fields autocomplete offers, after a space and after `@request.*`. */
+		filterNames?: FilterNames;
+		/**
+		 * Problems to underline, checked after every edit, e.g. from a parser; for languages
+		 * without a language service of their own.
+		 */
+		diagnostics?: (value: string) => Diagnostic[];
 		/** Show line numbers; turn off for short code such as a single expression. */
 		lineNumbers?: boolean;
 		/** Shown while the editor is empty. */
@@ -55,6 +65,12 @@
 	import type * as Monaco from 'monaco-editor';
 	import { untrack } from 'svelte';
 	import * as Spinner from '../../spinner';
+	import {
+		FILTER_LANGUAGE,
+		registerFilterCompletions,
+		registerFilterLanguage,
+		setDiagnostics
+	} from './code-filter';
 	import { loadMonaco, registerCompletions } from './code-monaco';
 
 	let {
@@ -62,6 +78,8 @@
 		language = 'javascript',
 		typings,
 		completions,
+		filterNames,
+		diagnostics,
 		lineNumbers = true,
 		placeholder,
 		allowReturn = false,
@@ -78,6 +96,8 @@
 
 	let editor = $state.raw<Monaco.editor.IStandaloneCodeEditor | null>(null);
 	let failed = $state(false);
+	// Set once the editor is created, so the diagnostics can be refreshed from an effect.
+	let monacoApi = $state.raw<typeof Monaco | null>(null);
 
 	const mount: Attachment<HTMLDivElement> = (node) => {
 		let disposed = false;
@@ -143,12 +163,20 @@
 					}
 				}
 
-				const extension = { javascript: 'js', typescript: 'ts', json: 'json', sql: 'sql' }[
-					settings.language
-				];
+				if (settings.language === 'filter') {
+					registerFilterLanguage(monaco);
+				}
+
+				const extension = {
+					javascript: 'js',
+					typescript: 'ts',
+					json: 'json',
+					sql: 'sql',
+					filter: 'filter'
+				}[settings.language];
 				const model = monaco.editor.createModel(
 					settings.initial,
-					settings.language,
+					settings.language === 'filter' ? FILTER_LANGUAGE : settings.language,
 					monaco.Uri.parse(`file:///${settings.key}.${extension}`)
 				);
 
@@ -156,7 +184,8 @@
 				monaco.editor.defineTheme('pouchbase', {
 					base: 'vs',
 					inherit: true,
-					rules: [],
+					// `variable`: `@request.*` and `@now` in filters.
+					rules: [{ token: 'variable', foreground: '7c3aed' }],
 					colors: {
 						'scrollbar.shadow': '#00000000',
 						'scrollbarSlider.background': '#d4d4d8',
@@ -218,6 +247,10 @@
 					);
 				}
 
+				if (settings.language === 'filter') {
+					disposables.push(registerFilterCompletions(monaco, model, () => filterNames));
+				}
+
 				disposables.push(
 					instance.onDidChangeModelContent(() => {
 						value = model.getValue();
@@ -228,6 +261,7 @@
 				);
 
 				editor = instance;
+				monacoApi = monaco;
 			})
 			.catch((error: unknown) => {
 				console.error('Could not load the code editor', error);
@@ -245,6 +279,16 @@
 			widgets.remove();
 		};
 	};
+
+	// Problems are underlined again after every edit, and when `diagnostics` changes.
+	$effect(() => {
+		const model = editor?.getModel();
+		const problems = diagnostics?.(value) ?? [];
+
+		if (monacoApi && model) {
+			setDiagnostics(monacoApi, model, problems);
+		}
+	});
 
 	// Changes from outside (e.g. a form reset) are written into the editor.
 	$effect(() => {

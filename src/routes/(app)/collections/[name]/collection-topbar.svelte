@@ -21,6 +21,7 @@
 		onDeleteSelected?: () => void;
 		onNewRecord?: () => void;
 		onOpenSettings?: () => void;
+		onOpenApi?: () => void;
 		onEditCollection?: () => void;
 		/** Current layout; the toggle only shows when `onViewChange` is given (e.g. for `files`). */
 		view?: 'table' | 'grid';
@@ -35,6 +36,7 @@
 		onDeleteSelected,
 		onNewRecord,
 		onOpenSettings,
+		onOpenApi,
 		onEditCollection,
 		view = 'table',
 		onViewChange
@@ -81,6 +83,10 @@
 			<Button.Root variant="secondary" disabled={!collection} onclick={onEditCollection}>
 				<Icon.Root icon="lucide:pencil" />
 				Edit collection
+			</Button.Root>
+			<Button.Root variant="secondary" disabled={!collection} onclick={onOpenApi}>
+				<Icon.Root icon="lucide:code-xml" />
+				API
 			</Button.Root>
 			<Button.Root variant="secondary" disabled={!collection} onclick={onOpenSettings}>
 				<Icon.Root icon="lucide:sliders-horizontal" />

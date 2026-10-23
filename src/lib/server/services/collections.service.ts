@@ -1,5 +1,6 @@
 import type { ErrorOf, ServiceError } from './base.service';
 import type { CollectionSettings } from '#lib/files/thumbnails.js';
+import type { ApiRules } from '#lib/filter/rules.js';
 import type { CreateFieldInput, Field, FieldsService } from './fields.service';
 import type { ResultAsync } from 'neverthrow';
 
@@ -7,9 +8,11 @@ import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { errAsync, fromPromise, okAsync } from 'neverthrow';
 
 import { BUILT_IN_DEFAULT_FIELDS, isAutoType } from '#lib/fields/field-types.js';
+import { apiActions } from '#lib/filter/rules.js';
 import { COLLECTION_NAME_PATTERN } from '#lib/schemas/collections.js';
 
 import { queryDatabase, tableExists } from '../db/query';
+import { compileRule } from '../filter';
 import { collections, fields } from '../db';
 import { Service } from './base.service';
 
@@ -331,6 +334,45 @@ export class CollectionsService extends Service {
 				this.db.update(collections).set({ settings }).where(eq(collections.id, collection.id)),
 				(error) => this.error(6013, 'UPDATE_SETTINGS_FAILED', error)
 			).map(() => settings);
+		});
+	}
+
+	/**
+	 * Replaces the API rules of a collection. Every rule is compiled against the collection's
+	 * fields first; invalid rules come back as issues keyed by action.
+	 */
+	updateRules(
+		name: string,
+		rules: ApiRules
+	): ResultAsync<
+		ApiRules,
+		| ServiceError<6001, 'GET_COLLECTION_FAILED'>
+		| ServiceError<6006, 'COLLECTION_NOT_FOUND'>
+		| ServiceError<6013, 'UPDATE_SETTINGS_FAILED'>
+		| (ServiceError<6014, 'INVALID_API_RULES'> & { data: { issues: Record<string, string> } })
+	> {
+		return this.requireWithFields(name).andThen(({ collection, fields: collectionFields }) => {
+			const issues: Record<string, string> = {};
+			const readable = collectionFields.filter((field) => field.type !== 'blob');
+			const saved: ApiRules = {};
+
+			for (const action of apiActions(collection)) {
+				const rule = rules[action] ?? null;
+
+				try {
+					// Compiled as a signed-in request, so every part of the rule is checked.
+					compileRule(rule, readable, { auth: {}, body: {} });
+					saved[action] = rule === null ? null : rule.trim();
+				} catch (error) {
+					issues[action] = error instanceof Error ? error.message : 'Invalid rule';
+				}
+			}
+
+			if (Object.keys(issues).length) {
+				return errAsync({ ...this.error(6014, 'INVALID_API_RULES'), data: { issues } });
+			}
+
+			return this.updateSettings(name, { rules: saved }).map(() => saved);
 		});
 	}
 

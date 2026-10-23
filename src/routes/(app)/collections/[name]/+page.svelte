@@ -30,6 +30,7 @@
 	import { isAutoType } from '#lib/fields/field-types.js';
 	import { FILES_COLLECTION, fileUrl, formatFileSize, isInlineImage } from '#lib/files/files.js';
 	import { previewThumbnail } from '#lib/files/thumbnails.js';
+	import ApiSheet from './api-sheet.svelte';
 	import CollectionSettingsSheet from './collection-settings-sheet.svelte';
 	import { getCollectionSettings } from './collection-settings.remote';
 	import ImageEditorDialog from './image-editor-dialog.svelte';
@@ -116,6 +117,7 @@
 
 	let sheetOpen = $state(false);
 	let settingsOpen = $state(false);
+	let apiOpen = $state(false);
 	// The edit collection sheet, optionally starting with the new field dialog (the add button in the
 	// grid header). Also opened by navigating here with `editCollection` state, after creating it.
 	let editor = $derived<'fields' | 'new-field' | null>(page.state.editCollection ? 'fields' : null);
@@ -243,6 +245,7 @@
 	onDeleteSelected={() => void confirmDelete(selectedIds)}
 	onNewRecord={() => openRecord(null)}
 	onOpenSettings={() => (settingsOpen = true)}
+	onOpenApi={() => (apiOpen = true)}
 	onEditCollection={() => editCollection()}
 	{view}
 	onViewChange={isFiles
@@ -425,6 +428,8 @@
 />
 
 <CollectionSettingsSheet {collection} bind:open={settingsOpen} />
+
+<ApiSheet {collection} {fields} {relationTargets} rules={settings.rules} bind:open={apiOpen} />
 
 <EditCollectionSheet
 	{collection}

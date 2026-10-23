@@ -6,7 +6,8 @@ import type { ResultAsync } from 'neverthrow';
 import { asc } from 'drizzle-orm';
 import { fromPromise, okAsync } from 'neverthrow';
 
-import { FIELD_TYPES, idGenerator } from '#lib/fields/field-types.js';
+import { FIELD_TYPES } from '#lib/fields/field-types.js';
+import { fieldValueType } from '#lib/fields/value-types.js';
 
 import { generateToken, hashToken } from '../crypto';
 import { collections, fields } from '../db';
@@ -21,65 +22,6 @@ function interfaceName(collection: string) {
 		.join('');
 
 	return `${pascal}Record`;
-}
-
-/** The TypeScript type of a field's value as the API returns it: the value stored in the column. */
-function valueType(field: Field, collectionNames: Map<string, string>) {
-	const target = field.options.collectionId
-		? collectionNames.get(field.options.collectionId)
-		: undefined;
-	const items = field.options.values ?? [];
-
-	switch (field.type) {
-		case 'id':
-			return idGenerator(field.options) === 'autoincrement'
-				? { type: 'number', note: 'Unique id of the record.' }
-				: { type: 'string', note: 'Unique id of the record.' };
-		case 'created':
-			return {
-				type: 'number',
-				note: 'When the record was created, in milliseconds since 1970 (UTC).'
-			};
-		case 'updated':
-			return {
-				type: 'number',
-				note: 'When the record was last saved, in milliseconds since 1970 (UTC).'
-			};
-		case 'rich_text':
-			return { type: 'string', note: field.options.format === 'markdown' ? 'Markdown.' : 'HTML.' };
-		case 'date':
-			return { type: 'string', note: 'ISO 8601 date and time in UTC.' };
-		case 'number':
-		case 'integer':
-			return { type: 'number' };
-		case 'boolean':
-			return { type: '0 | 1', note: '1 for true, 0 for false.' };
-		case 'json':
-			return { type: 'string', note: 'JSON text; use `JSON.parse` to read it.' };
-		case 'list':
-			if (field.options.multiple) {
-				return { type: 'string', note: 'JSON array of the selected items.' };
-			}
-
-			return {
-				type: items.length > 0 ? items.map((item) => JSON.stringify(item)).join(' | ') : 'string',
-				note: 'The selected item.'
-			};
-		case 'relation':
-			return field.options.multiple
-				? { type: 'string', note: `JSON array of ids of records in \`${target ?? '?'}\`.` }
-				: { type: 'string', note: `Id of a record in \`${target ?? '?'}\`.` };
-		case 'file':
-			return field.options.multiple
-				? { type: 'string', note: 'JSON array of ids of records in `files`.' }
-				: { type: 'string', note: 'Id of a record in `files`.' };
-		case 'computed':
-			return { type: 'string', note: 'Calculated when the record is saved.' };
-		case 'blob':
-			return { type: 'unknown', note: 'Binary data.' };
-		default:
-			return { type: 'string' };
-	}
 }
 
 /**
@@ -108,7 +50,15 @@ function declarations(appName: string, list: Collection[], all: Field[]) {
 		const members = all
 			.filter((field) => field.collectionId === collection.id)
 			.flatMap((field) => {
-				const value = valueType(field, collectionNames);
+				// The records API leaves blobs out.
+				if (field.type === 'blob') {
+					return [];
+				}
+
+				const value = fieldValueType(
+					field,
+					field.options.collectionId ? collectionNames.get(field.options.collectionId) : undefined
+				);
 				const filled = field.type === 'id' || field.type === 'created' || field.type === 'updated';
 				const nullable = !filled && !field.required;
 				const doc = [

@@ -65,6 +65,30 @@ button.addEventListener('click', async () => {
 
 The token never appears in a URL: the SDK proves it started the sign-in with a secret PKCE verifier and collects the result itself. Outside the browser, pass `open: (url) => …` to open the sign-in page another way.
 
+### Records
+
+```ts
+const posts = pb.collection('posts');
+
+// One page; `filter` and `sort` use the syntax of the API rules.
+const { items, totalItems, totalPages } = await posts.getList(1, 20, {
+	filter: 'status = "published"',
+	sort: '-created_at'
+});
+
+const all = await posts.getFullList({ sort: 'title' }); // every page
+const post = await posts.getFirstListItem(pb.filter('slug = {:slug}', { slug })); // or null
+const one = await posts.getOne('RECORD_ID'); // or null
+
+const created = await posts.create({ title: 'Hello', published: true, tags: ['news'] });
+const updated = await posts.update(created.id, { title: 'Hello again' }); // only these fields
+await posts.delete(created.id);
+```
+
+What a caller may do depends on the collection's API rules in the Pouchbase admin: a locked rule throws a `PouchbaseError` with status `403`, and records a rule doesn't match are left out of lists and are "not found" otherwise (`null` from `getOne()`, `404` from `update()` and `delete()`). Invalid values throw `400` with `issues` per field.
+
+Build filters with values from users through `pb.filter()`, which quotes and escapes them: `pb.filter('title ~ {:search} && views > {:min}', { search, min: 10 })`. The **API** panel of a collection in the admin shows these calls for its fields.
+
 ### Files
 
 ```ts
@@ -102,6 +126,7 @@ import type { Collections } from './pouchbase';
 
 const pb = new Pouchbase<Collections>('https://pouchbase.example.com');
 const user = await pb.auth.me(); // UsersRecord | null
+const post = await pb.collection('posts').getOne('RECORD_ID'); // PostsRecord | null
 ```
 
 Values are typed as the API returns them: booleans are `0 | 1`, JSON fields and multiple relations are JSON text. `fetchTypes(url)` downloads the types from code.

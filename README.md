@@ -185,9 +185,28 @@ Every sign-in returns `{ token, user_id }`. Send the token as `Authorization: Be
 | `GET /api/auth/oauth2/<provider>?state=…&challenge=…` | Opened in a popup; starts an OAuth sign-in                                    |
 | `POST /api/auth/oauth2/result`                        | `{ state, verifier }`: `202` while pending, then the result once              |
 | `GET /api/auth/me`                                    | The signed-in user, or `401`                                                  |
+| `GET /api/collections/<name>/records`                 | Records the list rule allows; `?page`, `perPage`, `sort`, `filter`            |
+| `GET /api/collections/<name>/records/<id>`            | One record, when the view rule allows it                                      |
+| `POST /api/collections/<name>/records`                | `{ <field>: value }`; creates a record when the create rule allows it         |
+| `PATCH /api/collections/<name>/records/<id>`          | Changes the given fields, when the update rule allows it                      |
+| `DELETE /api/collections/<name>/records/<id>`         | Deletes a record when the delete rule allows it; `204`                        |
 | `GET /api/files/<id>`                                 | A file from the `files` collection (public; ids are random)                   |
 | `GET /api/types?token=…`                              | TypeScript types of every collection; the URL is on the **Types** page        |
 | `<any method> /api/functions/<name>/<path>`           | Calls a [function](#functions); `401` when it requires sign-in, `404` if none |
+
+### Records API and API rules
+
+Every collection has a records API at `/api/collections/<name>/records`, guarded by the collection's **API rules** (the **API** button of the collection, under **Access rules**), one per action: list/search, view, create, update and delete. Each rule is one of:
+
+- **Admins only** (the default): not available through the API; only admins, in the dashboard.
+- **Everyone**: also without signing in.
+- **Signed-in users**: any request with a valid token (`@request.auth.id != ""`).
+- **Owner**: only the user in a relation field to `users`, such as `author = @request.auth.id` (in `users`: the user themselves).
+- **Custom rule**: a filter, and only records that match it are allowed, e.g. `status = "published" || author = @request.auth.id`. The list rule filters the results; the create rule is checked against the new record. The editor suggests fields as you type and underlines mistakes.
+
+Filters (`?filter=` and rules) use field names, `"strings"`, numbers, `true`/`false`, `null`, `@now`, `@request.auth.<field>` (the signed-in user; `""` when signed out) and `@request.body.<field>` (submitted values), with `=`, `!=`, `>`, `>=`, `<`, `<=`, `~` (contains), `!~`, the same with `?` in front for any item of a multiple relation or list (`tags ?= "news"`), `&&`, `||` and parentheses. `?sort=-created_at,title` sorts; `-` means descending.
+
+Records are returned as stored (as in the generated types); blob fields are left out. `users` can't be created through the API (use sign-up), and its `email` and `verified` can't be changed there; `files` can only be listed, viewed and deleted. The **Preview** tab of the same panel shows every endpoint with SDK and cURL examples for its fields.
 
 ### OAuth from your app
 
