@@ -1,5 +1,11 @@
 # pouchbase-site
 
+## 0.2.2
+
+### Patch Changes
+
+- [`d4992e4`](https://github.com/pouchbase/pouchbase/commit/d4992e49d2a4f5789c07ceceda6cde7413fd9f5d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Document `pouchbase update` for the single binary.
+
 ## 0.2.1
 
 ### Patch Changes

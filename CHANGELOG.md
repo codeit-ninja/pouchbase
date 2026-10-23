@@ -1,5 +1,11 @@
 # pouchbase
 
+## 0.5.0
+
+### Minor Changes
+
+- [`d4992e4`](https://github.com/pouchbase/pouchbase/commit/d4992e49d2a4f5789c07ceceda6cde7413fd9f5d) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add `pouchbase update` to the binary, which replaces it with the latest release from GitHub (`--check` only reports whether one is available).
+
 ## 0.4.0
 
 ### Minor Changes
