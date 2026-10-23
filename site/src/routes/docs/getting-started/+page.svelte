@@ -276,6 +276,14 @@
 		<Code.Root>apt-get install libatomic1</Code.Root>.
 	</p>
 
+	<p>
+		<Code.Root>pouchbase update</Code.Root> replaces the binary with the latest release from GitHub,
+		after checking its digest and running it once; <Code.Root>pouchbase update --check</Code.Root>
+		only reports whether a newer version is available. Restart the server afterwards to run the new
+		version. When the binary sits in a system directory such as <Code.Root>/usr/local/bin</Code.Root>,
+		run the update with <Code.Root>sudo</Code.Root>.
+	</p>
+
 	<h2 id="several-instances">Several instances on one account</h2>
 
 	<p>

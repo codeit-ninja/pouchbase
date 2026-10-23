@@ -11,15 +11,17 @@
  * It also calls `POST /internal/tick` once a minute, which runs scheduled backups (the Worker uses a
  * Cron Trigger for this instead).
  *
- * Commands: `serve` (the default) and `version`; `--help` lists the flags. Flags
+ * Commands: `serve` (the default), `version` and, in the binary, `update` (see `server-update.mjs`);
+ * `--help` lists the flags. Flags
  * override the environment, and a `.env` file in the working directory is read if there is one.
  *
  * Variables: ORIGIN, HOST (default 0.0.0.0), PORT (default 3000), SHUTDOWN_TIMEOUT (seconds,
  * default 30), plus the ones the handler reads itself (BODY_SIZE_LIMIT, ADDRESS_HEADER, ...) and the
  * app's own (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, POUCHBASE_INSTANCE, ...).
  */
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { isSea } from 'node:sea';
 import { parseArgs } from 'node:util';
 
 import pkg from './package.json' with { type: 'json' };
@@ -31,6 +33,7 @@ Usage: pouchbase [command] [flags]
 Commands:
   serve      Start the server (default)
   version    Print the version
+  update     Replace this binary with the latest release from GitHub
 
 Flags for serve:
   --http <host:port>   Address to listen on (default 0.0.0.0:3000, or HOST and PORT)
@@ -40,6 +43,9 @@ Flags for serve:
                        POUCHBASE_INSTANCE); instances with different names keep separate data
   --env-file <path>    Read environment variables from this file (default .env, if it exists)
   -h, --help           Show this help
+
+Flags for update:
+  --check              Only report whether a newer version is available
 
 The data lives on Cloudflare (D1 and R2): set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in the
 environment or in the env file.`;
@@ -52,6 +58,7 @@ const { values: flags, positionals } = parseArgs({
 		origin: { type: 'string' },
 		instance: { type: 'string' },
 		'env-file': { type: 'string' },
+		check: { type: 'boolean' },
 		help: { type: 'boolean', short: 'h' },
 		version: { type: 'boolean', short: 'v' }
 	}
@@ -66,6 +73,35 @@ if (flags.help) {
 
 if (flags.version || command === 'version') {
 	console.log(pkg.version);
+	process.exit(0);
+}
+
+// Left behind by an update on Windows, where the running executable can't be removed.
+if (isSea() && process.platform === 'win32') {
+	try {
+		rmSync(`${process.execPath}.old`, { force: true });
+	} catch {
+		// Still running in another process; the next start tries again.
+	}
+}
+
+if (command === 'update' && positionals.length === 1) {
+	if (!isSea()) {
+		console.error(
+			'Only the single binary updates itself. Pull the new image for Docker, or check out the new version and rebuild.'
+		);
+		process.exit(1);
+	}
+
+	const { update } = await import('./server-update.mjs');
+
+	try {
+		await update(pkg.version, { check: flags.check });
+	} catch (error) {
+		console.error(error.message);
+		process.exit(1);
+	}
+
 	process.exit(0);
 }
 

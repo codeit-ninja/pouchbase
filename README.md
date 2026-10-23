@@ -111,6 +111,8 @@ chmod +x pouchbase-linux-x64
 
 The binary reads `.env` from the working directory (or the file passed with `--env-file`), so put `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` there or in the environment. `--http`, `--port`, `--origin` and `--instance` override `HOST`, `PORT`, `ORIGIN` and `POUCHBASE_INSTANCE` (`--port=3001` changes only the port); the other variables from the table above apply as well. Run `pouchbase --help` for all flags. On Linux the binary needs `libatomic1`, which most distributions install by default (on minimal images such as `debian:slim`, install it with `apt-get install libatomic1`).
 
+`pouchbase update` replaces the binary with the latest release from GitHub, after checking its digest and running it once; `pouchbase update --check` only reports whether a newer version is available. Restart the server afterwards to run the new version. When the binary sits in a system directory such as `/usr/local/bin`, run the update with `sudo`.
+
 To build a binary for your own platform, run `pnpm build:binary` with Node 26; it is written to `dist/`.
 
 ### Several instances on one account
