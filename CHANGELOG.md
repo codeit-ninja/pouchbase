@@ -1,5 +1,11 @@
 # pouchbase
 
+## 0.1.2
+
+### Patch Changes
+
+- [`cc62e42`](https://github.com/pouchbase/pouchbase/commit/cc62e4263ce3f329607c95dec2215cb53e57f3e8) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Fix deploying to Cloudflare Workers: bundling the Worker failed on the stylesheet and font of the code editor.
+
 ## 0.1.1
 
 ### Patch Changes
