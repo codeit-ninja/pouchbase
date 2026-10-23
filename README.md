@@ -51,16 +51,18 @@ Requirements: Node 22 or later and pnpm 10 (`corepack enable`).
    pnpm install
    ```
 
-2. Build and deploy the Worker, then store the credentials as Worker secrets:
+2. Copy `.env.example` to `.env` and fill in `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (the comments there list the permissions the token needs).
+
+3. Build and deploy the Worker. `--secrets-file .env` stores the variables from `.env` as Worker secrets in the same step:
 
    ```bash
    pnpm build
-   pnpm wrangler deploy
-   pnpm wrangler secret put CLOUDFLARE_ACCOUNT_ID
-   pnpm wrangler secret put CLOUDFLARE_API_TOKEN
+   pnpm wrangler deploy --secrets-file .env
    ```
 
-3. Open the Worker URL.
+   Secrets stay on the Worker across deploys; pass `--secrets-file .env` again when you change them.
+
+4. Open the Worker URL.
 
 ### Docker Compose
 

@@ -74,12 +74,10 @@
 			</CodeBlock.Line>
 			<CodeBlock.Line>cp .env.example .env</CodeBlock.Line>
 			<CodeBlock.Line kind="comment" class="mt-5">
-				# Build, deploy and store them as Worker secrets
+				# Build, then deploy with them as Worker secrets
 			</CodeBlock.Line>
 			<CodeBlock.Line>pnpm build</CodeBlock.Line>
-			<CodeBlock.Line>pnpm wrangler deploy</CodeBlock.Line>
-			<CodeBlock.Line>pnpm wrangler secret put CLOUDFLARE_ACCOUNT_ID</CodeBlock.Line>
-			<CodeBlock.Line>pnpm wrangler secret put CLOUDFLARE_API_TOKEN</CodeBlock.Line>
+			<CodeBlock.Line>pnpm wrangler deploy --secrets-file .env</CodeBlock.Line>
 			<CodeBlock.Line kind="output" class="mt-5">
 				✓ Deployed to https://pouchbase.you.workers.dev
 			</CodeBlock.Line>
