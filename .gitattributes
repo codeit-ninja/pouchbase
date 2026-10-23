@@ -1,0 +1,3 @@
+# Text files always have LF line endings, also in a Windows checkout (core.autocrlf), so Prettier
+# and `wrangler types --check` see the same files everywhere.
+* text=auto eol=lf
