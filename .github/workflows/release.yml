@@ -167,6 +167,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts --filter "pouchbase..."
 
+      # The committed types depend on the developer's machine: the secrets in `.env` and whether a
+      # build exists (`GlobalProps`). Regenerate them, so `wrangler types --check` in the build passes.
+      - name: Generate the Worker types
+        run: pnpm exec wrangler types
+
       - name: Build
         run: pnpm build
 
@@ -198,6 +203,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --filter pouchbase-site
+
+      # The committed types depend on the developer's machine: the secrets in `.env` and whether a
+      # build exists (`GlobalProps`). Regenerate them, so `wrangler types --check` in the build passes.
+      - name: Generate the Worker types
+        run: pnpm --filter pouchbase-site gen
 
       - name: Build
         run: pnpm --filter pouchbase-site build
