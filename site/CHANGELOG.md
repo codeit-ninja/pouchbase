@@ -1,5 +1,11 @@
 # pouchbase-site
 
+## 0.2.1
+
+### Patch Changes
+
+- [`58029b0`](https://github.com/pouchbase/pouchbase/commit/58029b007f98c5573495a07be2325faf34efecdb) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Document how to run several instances on one Cloudflare account.
+
 ## 0.2.0
 
 ### Minor Changes

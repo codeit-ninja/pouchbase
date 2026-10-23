@@ -1,5 +1,11 @@
 # pouchbase
 
+## 0.4.0
+
+### Minor Changes
+
+- [`58029b0`](https://github.com/pouchbase/pouchbase/commit/58029b007f98c5573495a07be2325faf34efecdb) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add `POUCHBASE_INSTANCE` (and `--instance` on the binary) to run several separate instances on one Cloudflare account: it names the system database, the Worker and the function Workers.
+
 ## 0.3.0
 
 ### Minor Changes
