@@ -43,6 +43,7 @@ const output = join(
 /** Path prefix of the embedded files, as the handler sees them (`<dir>/client/...`). */
 const VIRTUAL_DIR = '/$pouchbase';
 const SEA_FS = '\0pouchbase:sea-fs';
+const BROWSER_ONLY = '\0pouchbase:browser-only';
 
 const seaFs = `
 import fs from 'node:fs';
@@ -67,6 +68,21 @@ export function createReadStream(path, options = {}) {
 
 export default { ...fs, createReadStream };
 `;
+
+/**
+ * Monaco only runs in the browser (`code-monaco.ts`), but its dynamic import stays in the Node build
+ * because `monaco-editor` is a dependency. The server never loads it, and rolldown can't bundle its
+ * CSS, so it becomes an empty module.
+ */
+const browserOnly = {
+	name: 'pouchbase:browser-only',
+	resolveId(source) {
+		return /^monaco-editor(\/|$)/.test(source) ? BROWSER_ONLY : null;
+	},
+	load(id) {
+		return id === BROWSER_ONLY ? 'export default {};' : null;
+	}
+};
 
 /** Swaps the handler's static file access for the embedded assets (see the top of this file). */
 const embedStatic = {
@@ -110,7 +126,7 @@ console.log('Bundling server.mjs and the Node build');
 const bundle = await rolldown({
 	input: join(root, 'server.mjs'),
 	platform: 'node',
-	plugins: [embedStatic],
+	plugins: [browserOnly, embedStatic],
 	logLevel: 'warn'
 });
 
