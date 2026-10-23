@@ -1,15 +1,30 @@
 import type { ErrorOf, ServiceError } from './base.service';
+import type { EnvironmentsService } from './environments.service';
+import type { ImportProblem } from '#lib/collections/transfer.js';
+import type { Plan } from '#lib/environments/diff.js';
 import type { CollectionSettings } from '#lib/files/thumbnails.js';
 import type { ApiRules } from '#lib/filter/rules.js';
+import type {
+	ApiCreateCollection,
+	ApiUpdateCollection,
+	CollectionExport
+} from '#lib/schemas/collections.js';
+import type { SnapshotCollection } from '#lib/schemas/environments.js';
 import type { CreateFieldInput, Field, FieldsService } from './fields.service';
 import type { ResultAsync } from 'neverthrow';
 
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { errAsync, fromPromise, okAsync } from 'neverthrow';
 
+import { exportCollections, planImport } from '#lib/collections/transfer.js';
+import { planSeverity } from '#lib/environments/diff.js';
 import { BUILT_IN_DEFAULT_FIELDS, isAutoType } from '#lib/fields/field-types.js';
 import { apiActions } from '#lib/filter/rules.js';
-import { COLLECTION_NAME_PATTERN } from '#lib/schemas/collections.js';
+import {
+	COLLECTION_EXPORT_FORMAT,
+	COLLECTION_NAME_PATTERN,
+	RESERVED_COLLECTION_NAMES
+} from '#lib/schemas/collections.js';
 
 import { queryDatabase, tableExists } from '../db/query';
 import { compileRule } from '../filter';
@@ -27,7 +42,78 @@ type EnsureSystemError =
 
 /** Collection names end up in SQL as table names, so they are validated here too, not only in forms. */
 function isValidName(name: string) {
-	return COLLECTION_NAME_PATTERN.test(name) && !name.startsWith('sqlite_');
+	return (
+		COLLECTION_NAME_PATTERN.test(name) &&
+		!name.startsWith('sqlite_') &&
+		!RESERVED_COLLECTION_NAMES.includes(name)
+	);
+}
+
+type SchemasError = ErrorOf<ReturnType<EnvironmentsService['collections']>>;
+
+/** Relation fields of the file point at collections this instance doesn't have. */
+type InvalidImport = ServiceError<6015, 'INVALID_IMPORT'> & { data: { problems: ImportProblem[] } };
+
+/** The plan deletes collections, fields or their data, and that wasn't confirmed. */
+type NotConfirmed = ServiceError<6016, 'DESTRUCTIVE_NOT_CONFIRMED'> & { data: { plan: Plan } };
+
+type ImportError =
+	| SchemasError
+	| InvalidImport
+	| NotConfirmed
+	| ErrorOf<ReturnType<EnvironmentsService['runSteps']>>;
+
+export type ImportOptions = {
+	/** Also delete the collections the file doesn't have (built-in collections stay). */
+	removeMissing: boolean;
+	/** Run a plan that deletes collections, fields or their data. */
+	force: boolean;
+	/** Only make the plan. */
+	dryRun: boolean;
+};
+
+/** An import: its plan, and whether it ran. */
+export type ImportResult = { plan: Plan; applied: boolean };
+
+type CollectionInput = Required<Pick<ApiUpdateCollection, 'fields' | 'indexes' | 'rules'>> &
+	Pick<ApiUpdateCollection, 'thumbnails'>;
+
+/** A collection as the collections API takes it, as a collection of an export file. */
+function toSnapshot(
+	id: string,
+	name: string,
+	input: CollectionInput,
+	existing: SnapshotCollection | null
+): SnapshotCollection {
+	return {
+		id,
+		name,
+		system: existing?.system ?? false,
+		settings: {
+			...existing?.settings,
+			rules: { ...existing?.settings.rules, ...input.rules },
+			...(input.thumbnails && { thumbnails: input.thumbnails })
+		},
+		fields: input.fields.map((field, position) => {
+			// A field without an id is the existing field with its name, or a new one.
+			const current = existing?.fields.find((candidate) =>
+				field.id ? candidate.id === field.id : candidate.name === field.name
+			);
+
+			return {
+				id: field.id ?? current?.id ?? crypto.randomUUID(),
+				name: field.name,
+				type: field.type,
+				required: field.required,
+				unique: field.unique,
+				defaultValue: field.defaultValue,
+				options: field.options,
+				system: current?.system ?? false,
+				position
+			};
+		}),
+		indexes: input.indexes.map((index) => ({ name: '', ...index }))
+	};
 }
 
 /** The table of a built-in collection starts with the columns of `BUILT_IN_DEFAULT_FIELDS`. */
@@ -66,9 +152,12 @@ export class CollectionsService extends Service {
 	/**
 	 * Registers a collection without fields. SQLite tables need at least one column, so its table is
 	 * created in the app database together with the first field (see `FieldsService.create`).
+	 *
+	 * @param id A publish keeps the id the collection has on the development instance.
 	 */
 	create(
-		name: string
+		name: string,
+		id?: string
 	): ResultAsync<
 		Collection,
 		| ServiceError<6001, 'GET_COLLECTION_FAILED'>
@@ -81,7 +170,7 @@ export class CollectionsService extends Service {
 		}
 
 		return this.ensureNameAvailable(name).andThen(() =>
-			fromPromise(this.db.insert(collections).values({ name }).returning(), (error) =>
+			fromPromise(this.db.insert(collections).values({ id, name }).returning(), (error) =>
 				this.error(6005, 'CREATE_COLLECTION_FAILED', error)
 			).map(([collection]) => collection)
 		);
@@ -374,6 +463,142 @@ export class CollectionsService extends Service {
 
 			return this.updateSettings(name, { rules: saved }).map(() => saved);
 		});
+	}
+
+	/** Every collection with its fields, indexes, API rules and settings, by name. */
+	schemas(): ResultAsync<SnapshotCollection[], SchemasError> {
+		return this.services.environments().collections();
+	}
+
+	/** One collection as `schemas` has them; `null` when it doesn't exist. */
+	schema(name: string): ResultAsync<SnapshotCollection | null, SchemasError> {
+		return this.schemas().map(
+			(schemas) => schemas.find((collection) => collection.name === name) ?? null
+		);
+	}
+
+	/** An export file of every collection, or of the ones in `names`. */
+	export(names?: string[]): ResultAsync<CollectionExport, SchemasError> {
+		return this.schemas().map((schemas) => exportCollections(schemas, names));
+	}
+
+	/**
+	 * Creates the collections of an export file and changes the existing ones to match it. A plan
+	 * that deletes collections, fields or data only runs with `force`.
+	 */
+	import(file: CollectionExport, options: ImportOptions): ResultAsync<ImportResult, ImportError> {
+		return this.schemas().andThen((target): ResultAsync<ImportResult, ImportError> => {
+			const planned = planImport(file, target, options);
+
+			if ('problems' in planned) {
+				return errAsync({
+					...this.error(6015, 'INVALID_IMPORT'),
+					data: { problems: planned.problems }
+				});
+			}
+
+			const { plan } = planned;
+
+			if (options.dryRun || !plan.steps.length) {
+				return okAsync({ plan, applied: false });
+			}
+
+			if (planSeverity(plan) === 'destructive' && !options.force) {
+				return errAsync({ ...this.error(6016, 'DESTRUCTIVE_NOT_CONFIRMED'), data: { plan } });
+			}
+
+			return this.services
+				.environments()
+				.runSteps(plan.steps)
+				.map(() => ({ plan, applied: true }));
+		});
+	}
+
+	/** Creates a collection with its fields, indexes and API rules (`POST /api/collections`). */
+	createFromApi(
+		input: ApiCreateCollection
+	): ResultAsync<
+		SnapshotCollection,
+		| ImportError
+		| ServiceError<6001, 'GET_COLLECTION_FAILED'>
+		| ServiceError<6002, 'INVALID_COLLECTION_NAME'>
+		| ServiceError<6003, 'COLLECTION_ALREADY_EXISTS'>
+		| ServiceError<6006, 'COLLECTION_NOT_FOUND'>
+	> {
+		if (!isValidName(input.name)) {
+			return errAsync(this.error(6002, 'INVALID_COLLECTION_NAME'));
+		}
+
+		const collection = toSnapshot(crypto.randomUUID(), input.name, input, null);
+
+		return this.ensureNameAvailable(input.name)
+			.andThen(() => this.applyOne(collection, false))
+			.andThen(() => this.requireSchema(collection.name));
+	}
+
+	/**
+	 * Changes a collection (`PATCH /api/collections/<name>`): only the given parts. Fields and
+	 * indexes left out of a given list are deleted, which needs `force`.
+	 */
+	updateFromApi(
+		name: string,
+		input: ApiUpdateCollection,
+		force: boolean
+	): ResultAsync<
+		SnapshotCollection,
+		| ImportError
+		| ServiceError<6002, 'INVALID_COLLECTION_NAME'>
+		| ServiceError<6006, 'COLLECTION_NOT_FOUND'>
+		| ServiceError<6011, 'SYSTEM_COLLECTION'>
+	> {
+		const newName = input.name ?? name;
+
+		if (newName !== name && !isValidName(newName)) {
+			return errAsync(this.error(6002, 'INVALID_COLLECTION_NAME'));
+		}
+
+		return this.requireSchema(name)
+			.andThen((existing) =>
+				existing.system && newName !== name
+					? errAsync(this.error(6011, 'SYSTEM_COLLECTION'))
+					: okAsync(existing)
+			)
+			.andThen((existing) => {
+				const collection = toSnapshot(
+					existing.id,
+					newName,
+					{
+						fields: input.fields ?? existing.fields,
+						indexes: input.indexes ?? existing.indexes,
+						rules: input.rules ?? {},
+						thumbnails: input.thumbnails
+					},
+					existing
+				);
+
+				return this.applyOne(collection, force).andThen(() => this.requireSchema(newName));
+			});
+	}
+
+	/** Imports one collection, leaving the others alone. */
+	private applyOne(collection: SnapshotCollection, force: boolean) {
+		return this.import(
+			{
+				format: COLLECTION_EXPORT_FORMAT,
+				exportedAt: new Date().toISOString(),
+				collections: [collection],
+				related: []
+			},
+			{ removeMissing: false, force, dryRun: false }
+		);
+	}
+
+	private requireSchema(
+		name: string
+	): ResultAsync<SnapshotCollection, SchemasError | ServiceError<6006, 'COLLECTION_NOT_FOUND'>> {
+		return this.schema(name).andThen((collection) =>
+			collection ? okAsync(collection) : errAsync(this.error(6006, 'COLLECTION_NOT_FOUND'))
+		);
 	}
 
 	/** The collection with this name; an error when it doesn't exist. */

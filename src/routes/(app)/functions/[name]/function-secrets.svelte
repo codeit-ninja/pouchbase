@@ -27,7 +27,10 @@
 				<Card.Description>
 					API keys and other values the code reads from <code>env</code>, such as
 					<code>env.STRIPE_KEY</code>. They are stored encrypted on the Worker, and can't be read
-					back here. <code>env.POUCHBASE_URL</code> is always set to the URL of this installation.
+					back here. <code>env.POUCHBASE_URL</code> is always set to the URL of this installation,
+					and
+					<code>env.POUCHBASE_API_KEY</code> to an API key of this function, for example to send email
+					templates.
 				</Card.Description>
 			</div>
 

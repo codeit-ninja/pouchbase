@@ -10,11 +10,10 @@
 	import * as Page from '#lib/components/ui/page/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
-	import { getAppName } from '#lib/remote/settings.remote.js';
 	import CreateFunctionDialog from './create-function-dialog.svelte';
 	import { getFunctions } from './functions.remote';
 
-	const [appName, functions] = $derived(await Promise.all([getAppName(), getFunctions()]));
+	const functions = $derived(await getFunctions());
 
 	const dialogs = Dialog.getDialogs();
 
@@ -22,7 +21,7 @@
 </script>
 
 <svelte:head>
-	<title>Functions · {appName}</title>
+	<title>Functions · Pouchbase</title>
 </svelte:head>
 
 <Topbar.Root>

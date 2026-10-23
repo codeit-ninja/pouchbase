@@ -7,13 +7,12 @@
 	import * as Icon from '#lib/components/ui/icon/index.js';
 	import * as Page from '#lib/components/ui/page/index.js';
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
-	import { getAppName } from '#lib/remote/settings.remote.js';
 	import { storageSettingsSchema } from '#lib/schemas/storage.js';
 	import StorageMigration from './storage-migration.svelte';
 	import { getStorageMigration, getStorageSettings, updateStorageSettings } from './storage.remote';
 
-	const [appName, settings, migration] = $derived(
-		await Promise.all([getAppName(), getStorageSettings(), getStorageMigration()])
+	const [settings, migration] = $derived(
+		await Promise.all([getStorageSettings(), getStorageMigration()])
 	);
 
 	// Shows the fields of the chosen provider before the settings are saved.
@@ -38,7 +37,7 @@
 </script>
 
 <svelte:head>
-	<title>Storage · {appName}</title>
+	<title>Storage · Pouchbase</title>
 </svelte:head>
 
 <Topbar.Root>

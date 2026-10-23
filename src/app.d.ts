@@ -5,13 +5,8 @@ import type { Services } from '#lib/server/services/services.js';
 // for information about these interfaces
 declare global {
 	namespace App {
-		interface Platform {
-			env: Env;
-			/** Only on Workers; the Node target (Docker, the binary) has no execution context. */
-			ctx?: ExecutionContext;
-			caches: CacheStorage;
-			cf?: IncomingRequestCfProperties;
-		}
+		// No `Platform`: SvelteKit 3 doesn't set `event.platform` on Cloudflare. The Worker's bindings
+		// and `waitUntil` come from `#lib/server/platform/runtime` (`cloudflare:workers`).
 
 		// interface Error {}
 		interface Locals {

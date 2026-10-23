@@ -2,12 +2,13 @@ import type { RequestHandler } from './$types';
 
 import { json, preflight } from '#lib/server/api.js';
 import { readJsonObject } from '#lib/server/api-body.js';
+import { background } from '#lib/server/platform/runtime/index.js';
 
 /**
  * Creates an app user with a username and password.
  * Body: `{ "username", "password", "email"?, "name"? }` → `{ token, user_id }`.
  */
-export const POST: RequestHandler = async ({ request, locals, platform }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
 	const body = await readJsonObject(request);
 
 	if (!body) {
@@ -57,7 +58,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 				}
 			});
 
-		platform?.ctx?.waitUntil(Promise.resolve(verification));
+		background(Promise.resolve(verification));
 	}
 
 	return json({ token: result.value.token, user_id: result.value.userId });

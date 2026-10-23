@@ -28,12 +28,6 @@
 			}
 		}}
 	>
-		<Form.Field field={form.fields.username}>
-			<Form.Label>Username</Form.Label>
-			<Form.Input autocomplete="off" />
-			<Form.Errors />
-		</Form.Field>
-
 		<Form.Field field={form.fields.email}>
 			<Form.Label>Email address</Form.Label>
 			<Form.Input type="email" autocomplete="off" />

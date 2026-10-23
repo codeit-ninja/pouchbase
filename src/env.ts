@@ -29,6 +29,16 @@ export const variables = defineEnvVars({
 			.max(19)
 			.default('pouchbase')
 	},
+	POUCHBASE_ADMIN_EMAIL: {
+		description:
+			'Email address of the first admin. With `POUCHBASE_ADMIN_PASSWORD`, Pouchbase installs itself on the first request instead of showing the install wizard; both are ignored once it is installed',
+		schema: z.string().optional()
+	},
+	POUCHBASE_ADMIN_PASSWORD: {
+		description:
+			'Password of the first admin (at least 10 characters), see `POUCHBASE_ADMIN_EMAIL`',
+		schema: z.string().optional()
+	},
 	PLUGIN_REGISTRY_URL: {
 		description:
 			'Plugin registry the Plugins page searches and installs from; defaults to the public registry on pouchbase.io. `pouchbase-plugin dev` prints the URL of a local one',

@@ -9,7 +9,7 @@ import { generateToken, hashToken, verifyPassword } from '../crypto';
 import { sessions, users } from '../db';
 import { Service } from './base.service';
 
-export type SessionUser = Pick<User, 'id' | 'username' | 'email'>;
+export type SessionUser = Pick<User, 'id' | 'email'>;
 
 export const SESSION_COOKIE = 'session';
 
@@ -85,7 +85,7 @@ export class SessionsService extends Service {
 
 				const [row] = await this.db
 					.select({
-						user: { id: users.id, username: users.username, email: users.email },
+						user: { id: users.id, email: users.email },
 						expiresAt: sessions.expiresAt
 					})
 					.from(sessions)
@@ -139,9 +139,9 @@ export class SessionsService extends Service {
 		);
 	}
 
-	/** Checks the credentials (username or email, and password) and starts a session. */
+	/** Checks the credentials (email and password) and starts a session. */
 	login(
-		identity: string,
+		email: string,
 		password: string
 	): ResultAsync<
 		SessionUser,
@@ -152,14 +152,14 @@ export class SessionsService extends Service {
 	> {
 		return this.services
 			.users()
-			.findByIdentity(identity)
+			.findByEmail(email)
 			.andThen((user) =>
 				fromPromise(
 					user ? verifyPassword(password, user.passwordHash) : Promise.resolve(false),
 					(error) => this.error(4004, 'LOGIN_FAILED', error)
 				).andThen((valid) =>
 					user && valid
-						? okAsync<SessionUser>({ id: user.id, username: user.username, email: user.email })
+						? okAsync<SessionUser>({ id: user.id, email: user.email })
 						: errAsync(this.error(4003, 'INVALID_CREDENTIALS'))
 				)
 			)

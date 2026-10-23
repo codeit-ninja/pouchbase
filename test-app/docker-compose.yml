@@ -1,0 +1,25 @@
+# Pouchbase for the test app, built from this checkout and served on http://localhost:4300 (a port
+# nothing else in the repository uses). Start it with `pnpm pouchbase:up` in this folder.
+name: pouchbase-test
+
+services:
+  pouchbase:
+    build: ..
+    restart: unless-stopped
+    ports:
+      - '4300:3000'
+    # The Cloudflare credentials (the data lives on D1 and R2): from the `.env` at the repository
+    # root, which `pnpm dev` uses too, or from `.env` in this folder.
+    env_file:
+      - path: ../.env
+        required: false
+      - path: .env
+        required: false
+    environment:
+      ORIGIN: http://localhost:4300
+      # Its own system database and function Workers, apart from the instance `pnpm dev` uses.
+      POUCHBASE_INSTANCE: pouchbase-test
+      # Installs it on the first request, with this admin; set others in `.env` in this folder.
+      POUCHBASE_ADMIN_EMAIL: ${POUCHBASE_ADMIN_EMAIL:-admin@pouchbase.test}
+      POUCHBASE_ADMIN_PASSWORD: ${POUCHBASE_ADMIN_PASSWORD:-pouchbase-test}
+      BODY_SIZE_LIMIT: 16M

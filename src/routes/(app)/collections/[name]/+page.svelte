@@ -30,6 +30,7 @@
 	import { isAutoType } from '#lib/fields/field-types.js';
 	import { FILES_COLLECTION, fileUrl, formatFileSize, isInlineImage } from '#lib/files/files.js';
 	import { previewThumbnail } from '#lib/files/thumbnails.js';
+	import { LiveCollection } from '#lib/realtime/live.svelte.js';
 	import ApiSheet from './api-sheet.svelte';
 	import CollectionSettingsSheet from './collection-settings-sheet.svelte';
 	import { getCollectionSettings } from './collection-settings.remote';
@@ -90,6 +91,12 @@
 		...fieldColumns.slice(leading)
 	]);
 	const signInMethods = $derived(data.signInMethods ?? {});
+
+	// Changes by anyone (the API, other admins, functions) refresh the page of records.
+	const live = new LiveCollection(
+		() => params.name,
+		() => void listRecords(args).refresh()
+	);
 
 	// `files` can be shown as a grid of large previews; the layout lives in the URL too.
 	const view = $derived(isFiles && page.url.searchParams.get('view') === 'grid' ? 'grid' : 'table');
@@ -240,6 +247,7 @@
 <CollectionTopbar
 	name={params.name}
 	{collection}
+	live={live.state}
 	selected={selectedIds}
 	onClearSelection={() => selection.clear()}
 	onDeleteSelected={() => void confirmDelete(selectedIds)}

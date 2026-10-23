@@ -1,10 +1,14 @@
 import { AuthStore } from './auth-store.js';
 import { PouchbaseError } from './error.js';
 import { AuthService } from './services/auth.js';
+import { CollectionsService } from './services/collections.js';
 import { FilesService } from './services/files.js';
 import { FunctionsService } from './services/functions.js';
+import { MailService } from './services/mail.js';
 import { createDb } from './services/db.js';
 import type { Db } from './services/db.js';
+import { RealtimeService } from './services/realtime.js';
+import type { WebSocketLike } from './realtime/connection.js';
 import type { DefaultCollections, Issues } from './types.js';
 
 /** Options for `new Pouchbase()`. */
@@ -13,8 +17,18 @@ export type PouchbaseOptions = {
 	authStore?: AuthStore;
 	/** The `fetch` to use, for example to add retries or for tests. Defaults to `globalThis.fetch`. */
 	fetch?: typeof fetch;
+	/**
+	 * API key for server-side code (`pbk_…`), such as `env.POUCHBASE_API_KEY` in a function; needed
+	 * for `pb.mail.send()`, `pb.collections` and `pb.asService()`. Never put one in code that runs in a browser.
+	 */
+	apiKey?: string;
 	/** Headers sent with every request. */
 	headers?: Record<string, string>;
+	/**
+	 * The `WebSocket` class for `pb.realtime`. Defaults to `globalThis.WebSocket` (browsers, Node 22
+	 * and later, Deno, Bun, Workers); pass one, such as `ws`, where there is none.
+	 */
+	webSocket?: WebSocketLike;
 };
 
 /** Options for `pb.send()`. */
@@ -57,11 +71,22 @@ export class Pouchbase<C extends object = DefaultCollections> {
 	 * caller may do follows each collection's API rules.
 	 */
 	readonly db: Db<C>;
+	/** Live changes to records over a WebSocket: `pb.realtime.subscribe('posts', …)`. */
+	readonly realtime: RealtimeService;
+	/** Email templates, sent with the `apiKey`: `pb.mail.send({ template, to, variables })`. */
+	readonly mail: MailService;
+	/**
+	 * The schema (collections, fields, indexes, API rules), export and import; needs an `apiKey`
+	 * with the `service` scope: `pb.collections.create({ name, fields })`.
+	 */
+	readonly collections: CollectionsService;
 
 	#fetch: typeof fetch;
 	#headers: Record<string, string>;
+	#options: PouchbaseOptions;
 
 	constructor(baseUrl: string, options: PouchbaseOptions = {}) {
+		this.#options = options;
 		this.baseUrl = baseUrl.replace(/\/+$/, '');
 		this.authStore = options.authStore ?? new AuthStore();
 		this.#fetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
@@ -70,6 +95,9 @@ export class Pouchbase<C extends object = DefaultCollections> {
 		this.files = new FilesService(this);
 		this.functions = new FunctionsService(this);
 		this.db = createDb<C>(this);
+		this.realtime = new RealtimeService(this, options.webSocket);
+		this.mail = new MailService(this, options.apiKey);
+		this.collections = new CollectionsService(this, options.apiKey);
 	}
 
 	/** Absolute URL of an API path, such as `/api/health`. */
@@ -132,6 +160,35 @@ export class Pouchbase<C extends object = DefaultCollections> {
 		}
 
 		return data as T;
+	}
+
+	/**
+	 * A client that sends the `apiKey` instead of the signed-in user's token, for server-side code
+	 * with a key of the `service` scope: its records calls skip the collections' API rules, as an
+	 * admin would. Other keys get `403` from the records API.
+	 *
+	 * ```ts
+	 * const pb = new Pouchbase(env.POUCHBASE_URL, { apiKey: env.POUCHBASE_SERVICE_KEY });
+	 * await pb.asService().db.posts.patch(id, { featured: true });
+	 * ```
+	 *
+	 * @throws {PouchbaseError} Without an `apiKey`.
+	 */
+	asService(): Pouchbase<C> {
+		const { apiKey } = this.#options;
+
+		if (!apiKey) {
+			throw new PouchbaseError(
+				'A service client needs an API key: new Pouchbase(url, { apiKey })',
+				{ status: 401 }
+			);
+		}
+
+		return new Pouchbase<C>(this.baseUrl, {
+			...this.#options,
+			authStore: new AuthStore(),
+			headers: { ...this.#headers, Authorization: `Bearer ${apiKey}` }
+		});
 	}
 
 	/** Whether the instance serves requests (`GET /api/health`). */

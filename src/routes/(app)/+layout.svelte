@@ -22,8 +22,11 @@
 	// Breadcrumb shown by the skeleton of each regular page; keep in sync with the page's Topbar.
 	const titles: Record<string, string> = {
 		'/(app)': 'Dashboard',
+		'/(app)/api-keys': 'API keys',
 		'/(app)/auth': 'Authentication',
+		'/(app)/environments': 'Environments',
 		'/(app)/functions': 'Functions',
+		'/(app)/mail': 'Mail',
 		'/(app)/settings': 'Settings'
 	};
 </script>

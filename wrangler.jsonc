@@ -19,6 +19,12 @@
 	"alias": {
 		"monaco-editor": "./scripts/browser-only.js"
 	},
+	// Realtime: one Durable Object per collection holds its WebSockets (scripts/worker-entry.mjs,
+	// src/lib/server/realtime/durable-object.ts). SQLite-backed, which the Free plan allows too.
+	"durable_objects": {
+		"bindings": [{ "name": "REALTIME", "class_name": "RealtimeHub" }]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["RealtimeHub"] }],
 	"workers_dev": true,
 	"preview_urls": true
 }

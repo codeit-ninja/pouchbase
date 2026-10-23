@@ -8,7 +8,6 @@ import { settings } from '../db';
 import { Service } from './base.service';
 
 export type SettingKey =
-	| 'app_name'
 	| 'installed_at'
 	| 'app_database_id'
 	| 'app_database_name'
@@ -43,8 +42,16 @@ export type SettingKey =
 	| 's3_path_style'
 	/** JSON: the previous storage while its files are copied to the new one, and how far it got. */
 	| 'storage_migration'
+	/** URL of the instance this one publishes to and pulls from (see `EnvironmentsService`). */
+	| 'environment_remote_url'
+	/** Deploy token of that instance. */
+	| 'environment_remote_token'
+	/** `development` or `production` (see `EnvironmentsService`); unset on instances that don't use environments. */
+	| 'environment'
 	/** Secret in the URL of `GET /api/types`, which serves the TypeScript types of the collections. */
-	| 'types_token';
+	| 'types_token'
+	/** JSON: the latest release on GitHub and when it was looked up (see `UpdatesService`). */
+	| 'update_check';
 
 export class SettingsService extends Service {
 	get(key: SettingKey): ResultAsync<string | null, ServiceError<5000, 'GET_SETTING_FAILED'>> {

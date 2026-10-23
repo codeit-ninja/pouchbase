@@ -8,8 +8,9 @@ This repository holds the app (at the root) and its workspace packages, each wit
 | `packages/plugin-sdk` | `@pouchbasejs/plugin-sdk`, the plugin contract and CLI         | MIT                 |
 | `packages/js-sdk`     | `@pouchbasejs/js-sdk`, the TypeScript SDK for the public API   | MIT                 |
 | `site`                | pouchbase.io, the marketing site and docs                      | All rights reserved |
+| `test-app`            | `pouchbase-test`, a test app on Pouchbase and the JS SDK       | Private             |
 
-Run a package's scripts from the root with `pnpm --filter <name> <script>` (`pouchbase-site`, `@pouchbasejs/js-sdk`, `@pouchbasejs/plugin-sdk`). There is one lockfile, at the root.
+Run a package's scripts from the root with `pnpm --filter <name> <script>` (`pouchbase-site`, `pouchbase-test`, `@pouchbasejs/js-sdk`, `@pouchbasejs/plugin-sdk`). There is one lockfile, at the root.
 
 ## Project Configuration
 
@@ -44,7 +45,7 @@ Before writing or editing any `.svelte` file, load the **`pouchbase-components`*
 Before writing server-side code (`src/lib/server`, `*.remote.ts`, hooks, `+page.server.ts`, `+server.ts`), load the **`pouchbase-services`** skill (`.claude/skills/pouchbase-services/SKILL.md`). In short:
 
 - Business logic lives in `src/lib/server/services/<domain>.service.ts` as `class XService extends Service`, registered in `services.ts` and reached via `locals.services.x()`.
-- Every public method returns a neverthrow `ResultAsync<T, ServiceError<Code, 'MESSAGE'>>`; error codes are unique per service range (1000 database, 2000 install, 3000 users, 4000 sessions, 5000 settings, 6000 collections, 7000 fields, 8000 records, 9000 indexes, 10000 OAuth providers, 11000 auth, 12000 storage, 13000 files, 14000 cloudflare, 15000 mail, 16000 backups, 17000 types, 18000 functions, 19000 plugins); the full table is in the skill.
+- Every public method returns a neverthrow `ResultAsync<T, ServiceError<Code, 'MESSAGE'>>`; error codes are unique per service range (1000 database, 2000 install, 3000 users, 4000 sessions, 5000 settings, 6000 collections, 7000 fields, 8000 records, 9000 indexes, 10000 OAuth providers, 11000 auth, 12000 storage, 13000 files, 14000 cloudflare, 15000 mail, 16000 backups, 17000 types, 18000 functions, 19000 plugins, 20000 environments, 21000 updates, 22000 realtime, 23000 API keys, 24000 mail templates); the full table is in the skill.
 - Callers check `result.isErr()` and map errors to `invalid()` / `error()` themselves; "not found" is `Ok(null)`.
 
 ## Public API and SDK

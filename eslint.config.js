@@ -10,8 +10,8 @@ const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
 
 export default defineConfig(
 	includeIgnoreFile(gitignorePath),
-	// The site and the JS SDK have their own ESLint config (`pnpm --filter <name> lint`).
-	globalIgnores(['site/', 'packages/js-sdk/']),
+	// The site, the JS SDK and the test app have their own ESLint config (`pnpm --filter <name> lint`).
+	globalIgnores(['site/', 'packages/js-sdk/', 'test-app/']),
 	js.configs.recommended,
 	ts.configs.recommended,
 	svelte.configs.recommended,

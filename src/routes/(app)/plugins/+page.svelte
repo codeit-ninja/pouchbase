@@ -13,7 +13,6 @@
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Tile from '#lib/components/ui/tile/index.js';
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
-	import { getAppName } from '#lib/remote/settings.remote.js';
 	import PluginTile from './plugin-tile.svelte';
 	import { getInstalledPlugins, searchPlugins } from './plugins.remote';
 	import UninstallPluginDialog from './uninstall-plugin-dialog.svelte';
@@ -24,7 +23,7 @@
 
 	const query = new Debounced(() => search.trim(), 300);
 
-	const [appName, installed] = $derived(await Promise.all([getAppName(), getInstalledPlugins()]));
+	const installed = $derived(await getInstalledPlugins());
 	const results = $derived(await searchPlugins({ query: query.current, page }));
 	const installedById = $derived(
 		Object.fromEntries(installed.map((plugin) => [plugin.id, plugin]))
@@ -54,7 +53,7 @@
 </script>
 
 <svelte:head>
-	<title>Plugins · {appName}</title>
+	<title>Plugins · Pouchbase</title>
 </svelte:head>
 
 <Topbar.Root>

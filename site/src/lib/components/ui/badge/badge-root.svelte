@@ -1,7 +1,7 @@
 <script module lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
 
-	export type Variant = 'neutral' | 'outline';
+	export type Variant = 'neutral' | 'outline' | 'brand';
 
 	export type Props = HTMLAttributes<HTMLSpanElement> & {
 		variant?: Variant;
@@ -13,7 +13,8 @@
 
 	const variants = {
 		neutral: 'border-transparent bg-zinc-100 text-zinc-700',
-		outline: 'border-zinc-300 text-zinc-600'
+		outline: 'border-zinc-300 text-zinc-600',
+		brand: 'border-transparent bg-brand-50 text-brand-700'
 	};
 </script>
 

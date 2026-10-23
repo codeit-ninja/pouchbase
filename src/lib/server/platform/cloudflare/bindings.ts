@@ -1,6 +1,6 @@
 import { dev } from '$app/env';
-import { getRequestEvent } from '$app/server';
 
+import { workerEnv as runtimeEnv } from '../runtime';
 import { cloudflareFetch, failure } from './api';
 import { WORKER_NAME } from './insights';
 
@@ -37,12 +37,7 @@ function workerEnv(): Record<string, unknown> | null {
 		return null;
 	}
 
-	try {
-		return (getRequestEvent().platform?.env as Record<string, unknown> | undefined) ?? null;
-	} catch {
-		// Outside a request.
-		return null;
-	}
+	return runtimeEnv();
 }
 
 /** The D1 binding of this database, or `null` when the running Worker has none (yet). */
@@ -67,6 +62,17 @@ export async function attachBindings(databaseIds: string[]) {
 
 	const path = `/workers/scripts/${encodeURIComponent(WORKER_NAME)}/settings`;
 	const response = await cloudflareFetch(path);
+
+	// The Worker finds itself by the instance name. Deployed under another name, it can't add its
+	// bindings and every query keeps going through the REST API, which is slow and makes a first
+	// install run into the Worker's subrequest limit.
+	if (response.status === 404) {
+		console.warn(
+			`[pouchbase] There is no Worker named "${WORKER_NAME}" (POUCHBASE_INSTANCE) on the account, so this Worker can't add its D1 bindings and every query goes through the slower REST API. Deploy it under the instance name: wrangler deploy --name ${WORKER_NAME} --var POUCHBASE_INSTANCE:${WORKER_NAME}`
+		);
+
+		return;
+	}
 
 	if (!response.ok) {
 		throw await failure(response);

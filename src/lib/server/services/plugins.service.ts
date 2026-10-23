@@ -128,11 +128,13 @@ export class PluginsService extends Service {
 	}
 
 	/**
-	 * Installs the newest version of a plugin that this Pouchbase can run, or updates an installed
-	 * plugin to it.
+	 * Installs the newest version of a plugin that this Pouchbase can run (or the `requested` one), or
+	 * updates an installed plugin to it.
 	 */
 	install(
-		id: string
+		id: string,
+		/** A publish installs the version the development instance has. */
+		requested = 'latest'
 	): ResultAsync<
 		InstalledPlugin,
 		| RegistryFailed
@@ -141,7 +143,7 @@ export class PluginsService extends Service {
 		| InvalidBundle
 		| ServiceError<19005, 'INSTALL_FAILED'>
 	> {
-		return fromPromise(this.registry.getVersion(id, 'latest', SUPPORTED_API_VERSIONS), (error) =>
+		return fromPromise(this.registry.getVersion(id, requested, SUPPORTED_API_VERSIONS), (error) =>
 			this.registryError(error)
 		)
 			.andThen((version) => {

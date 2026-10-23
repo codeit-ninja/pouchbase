@@ -1,6 +1,7 @@
 <script lang="ts">
 	import './layout.css';
 	import favicon from '#lib/assets/favicon.svg';
+	import * as Toast from '#lib/components/ui/toast/index.js';
 	import { MotionConfig } from 'motion-sv';
 	import type { LayoutProps } from './$types';
 	import SiteFooter from './site-footer.svelte';
@@ -24,3 +25,5 @@
 		<SiteFooter />
 	</div>
 </MotionConfig>
+
+<Toast.Root />

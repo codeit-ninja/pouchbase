@@ -50,7 +50,6 @@
 		<Table.Root>
 			<Table.Header>
 				<Table.Row>
-					<Table.Head>Username</Table.Head>
 					<Table.Head>Email address</Table.Head>
 					<Table.Head>Created</Table.Head>
 				</Table.Row>
@@ -60,13 +59,12 @@
 					<Table.Row>
 						<Table.Cell class="font-medium text-zinc-900">
 							<span class="flex items-center gap-2">
-								{admin.username}
+								{admin.email}
 								{#if admin.id === user?.id}
 									<Badge.Root variant="outline">You</Badge.Root>
 								{/if}
 							</span>
 						</Table.Cell>
-						<Table.Cell>{admin.email}</Table.Cell>
 						<Table.Cell class="whitespace-nowrap">{dateFormat.format(admin.createdAt)}</Table.Cell>
 					</Table.Row>
 				{/each}

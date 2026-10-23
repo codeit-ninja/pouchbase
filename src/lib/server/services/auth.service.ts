@@ -3,13 +3,13 @@ import type { CollectionsService } from './collections.service';
 import type { DatabaseService } from './database.service';
 import type { FilesService } from './files.service';
 import type { CreateFieldInput, FieldsService } from './fields.service';
-import type { MailService } from './mail.service';
+import type { MailTemplatesService } from './mail-templates.service';
 import type { OAuthProvider } from '#lib/auth/oauth-providers.js';
-import type { ResultAsync } from 'neverthrow';
+import type { Result } from 'neverthrow';
 
 import { eq, lt, type SQL } from 'drizzle-orm';
 import { jwtVerify, SignJWT } from 'jose';
-import { errAsync, fromPromise, okAsync } from 'neverthrow';
+import { errAsync, fromPromise, okAsync, ResultAsync } from 'neverthrow';
 
 import { oauthCallbackPath } from '#lib/auth/oauth-providers.js';
 import {
@@ -21,9 +21,9 @@ import {
 import { batchDatabase, queryDatabase, queryObjects } from '../db/query';
 import { generateRecordId, generateToken, hashPassword, verifyPassword } from '../crypto';
 import { fields, oauthRequests } from '../db';
-import { passwordResetEmail, verificationEmail } from '../mail/templates';
 import { authorizationUrl, exchangeCode, randomToken } from '../oauth';
 import { Service } from './base.service';
+import { inBackground } from './realtime.service';
 
 /** The built-in collection app users are stored in. */
 export { USERS_COLLECTION } from '#lib/auth/users.js';
@@ -70,6 +70,9 @@ type TokenPurpose = 'password_reset' | 'verification';
 
 // Once ensured, the users collection stays; cache it per isolate.
 let usersReady = false;
+
+/** The setup that is running, so concurrent first requests share it instead of racing. */
+let usersSetup: Promise<Result<void, EnsureUsersError>> | null = null;
 
 /** How long a sign-in may take, from opening the popup to collecting the token. */
 const OAUTH_REQUEST_TTL = 10 * 60 * 1000;
@@ -128,6 +131,15 @@ export class AuthService extends Service {
 			return okAsync(undefined);
 		}
 
+		const setup = (usersSetup ??= Promise.resolve(this.setUpUsersCollection()).then((result) => {
+			usersSetup = null;
+			return result;
+		}));
+
+		return new ResultAsync(setup);
+	}
+
+	private setUpUsersCollection(): ResultAsync<void, EnsureUsersError> {
 		return this.services
 			.files()
 			.ensureFilesCollection()
@@ -709,7 +721,7 @@ export class AuthService extends Service {
 		| ServiceError<1004, 'APP_DATABASE_MISSING'>
 		| ServiceError<5000, 'GET_SETTING_FAILED'>
 		| ServiceError<5001, 'SET_SETTING_FAILED'>
-		| ErrorOf<ReturnType<MailService['send']>>
+		| ErrorOf<ReturnType<MailTemplatesService['send']>>
 		| ServiceError<11020, 'PASSWORD_AUTH_DISABLED'>
 		| ServiceError<11027, 'MAIL_DISABLED'>
 		| ServiceError<11030, 'PASSWORD_RESET_FAILED'>
@@ -749,14 +761,15 @@ export class AuthService extends Service {
 				})
 					.mapErr((error) => this.error(11030, 'PASSWORD_RESET_FAILED', error))
 					.andThen((token) =>
-						this.appName().andThen((appName) =>
-							this.services
-								.mail()
-								.send(
-									user.email,
-									passwordResetEmail(appName, this.accountUrl('/account/reset-password', token))
-								)
-						)
+						this.services
+							.mailTemplates()
+							.send(
+								'password-reset',
+								[user.email],
+								{ url: this.accountUrl('/account/reset-password', token), email: user.email },
+								{ system: true }
+							)
+							.map(() => undefined)
 					);
 			});
 	}
@@ -804,16 +817,20 @@ export class AuthService extends Service {
 								const now = Date.now();
 
 								// Following the link proves the address, so the user is verified too.
-								await batchDatabase(appDatabase.id, [
+								const [, verified] = await batchDatabase(appDatabase.id, [
 									{
 										sql: `INSERT INTO "_passwords" ("user_id", "hash", "updated_at") VALUES (?, ?, ?) ON CONFLICT ("user_id") DO UPDATE SET "hash" = excluded."hash", "updated_at" = excluded."updated_at"`,
 										params: [claims.sub, await hashPassword(parsed.data), now]
 									},
 									{
-										sql: `UPDATE "users" SET "verified" = 1, "updated_at" = ? WHERE "id" = ? AND "verified" = 0`,
+										sql: `UPDATE "users" SET "verified" = 1, "updated_at" = ? WHERE "id" = ? AND "verified" = 0 RETURNING "id"`,
 										params: [now, claims.sub]
 									}
 								]);
+
+								if (verified?.length) {
+									this.changed('update', claims.sub);
+								}
 
 								return true;
 							})(),
@@ -837,7 +854,7 @@ export class AuthService extends Service {
 		| ServiceError<1004, 'APP_DATABASE_MISSING'>
 		| ServiceError<5000, 'GET_SETTING_FAILED'>
 		| ServiceError<5001, 'SET_SETTING_FAILED'>
-		| ErrorOf<ReturnType<MailService['send']>>
+		| ErrorOf<ReturnType<MailTemplatesService['send']>>
 		| ServiceError<11027, 'MAIL_DISABLED'>
 		| ServiceError<11031, 'VERIFICATION_FAILED'>
 	> {
@@ -865,14 +882,15 @@ export class AuthService extends Service {
 				})
 					.mapErr((error) => this.error(11031, 'VERIFICATION_FAILED', error))
 					.andThen((token) =>
-						this.appName().andThen((appName) =>
-							this.services
-								.mail()
-								.send(
-									address,
-									verificationEmail(appName, this.accountUrl('/account/verify-email', token))
-								)
-						)
+						this.services
+							.mailTemplates()
+							.send(
+								'verification',
+								[address],
+								{ url: this.accountUrl('/account/verify-email', token), email: address },
+								{ system: true }
+							)
+							.map(() => undefined)
 					);
 			});
 	}
@@ -914,6 +932,7 @@ export class AuthService extends Service {
 										`UPDATE "users" SET "verified" = 1, "updated_at" = ? WHERE "id" = ?`,
 										[Date.now(), claims.sub]
 									);
+									this.changed('update', claims.sub);
 								}
 
 								return true;
@@ -985,14 +1004,20 @@ export class AuthService extends Service {
 	}
 
 	/**
-	 * Fills the computed fields of a user created by a sign-up, which inserts the row directly.
-	 * Best effort: a sign-up never fails because of a computed field.
+	 * Fills the computed fields of a user created by a sign-up, which inserts the row directly, and
+	 * then sends its realtime event. Best effort: a sign-up never fails because of a computed field.
 	 */
 	private refreshComputed(userId: string): ResultAsync<void, never> {
 		return this.services
 			.records()
 			.refreshComputed(USERS_COLLECTION, [userId])
-			.orElse(() => okAsync(undefined));
+			.orElse(() => okAsync(undefined))
+			.map(() => this.changed('create', userId));
+	}
+
+	/** Sends the realtime event of a user this service wrote directly. */
+	private changed(action: 'create' | 'update', userId: string) {
+		inBackground(this.services.records().announceStored(USERS_COLLECTION, action, [userId]));
 	}
 
 	/**
@@ -1017,7 +1042,7 @@ export class AuthService extends Service {
 									(error) => this.error(11004, 'SIGN_IN_FAILED', error)
 								)
 							)
-							.map(() => undefined)
+							.map(() => this.changed('update', userId))
 					: okAsync(undefined)
 			)
 			.orElse(() => okAsync(undefined));
@@ -1128,13 +1153,6 @@ export class AuthService extends Service {
 			.andThen((enabled) =>
 				enabled ? okAsync(undefined) : errAsync(this.error(11027, 'MAIL_DISABLED'))
 			);
-	}
-
-	private appName() {
-		return this.services
-			.settings()
-			.get('app_name')
-			.map((name) => name ?? 'Pouchbase');
 	}
 
 	/** Link to a page of this deployment that handles an email link. */

@@ -21,7 +21,11 @@ export const FUNCTION_NAME_MAX_LENGTH = 40;
 export const SECRET_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
 
 /** Variables Pouchbase sets itself; secrets can't use these names. */
-export const RESERVED_ENV_NAMES = ['POUCHBASE_URL', 'POUCHBASE_FUNCTION_SECRET'];
+export const RESERVED_ENV_NAMES = [
+	'POUCHBASE_URL',
+	'POUCHBASE_FUNCTION_SECRET',
+	'POUCHBASE_API_KEY'
+];
 
 /** Most code a version may have (source and compiled JavaScript together), in bytes. */
 export const MAX_CODE_SIZE = 1024 * 1024;
@@ -45,6 +49,8 @@ const TYPESCRIPT_TEMPLATE = `/** Variables and secrets of this function (Secrets
 interface Env {
 	/** URL of this Pouchbase installation. */
 	POUCHBASE_URL: string;
+	/** API key of this function, e.g. to send email templates (pb.mail.send of the JS SDK). */
+	POUCHBASE_API_KEY: string;
 }
 
 export default {
@@ -62,7 +68,8 @@ export default {
 const JAVASCRIPT_TEMPLATE = `export default {
 	/**
 	 * @param {Request} request
-	 * @param {{ POUCHBASE_URL: string }} env Variables and secrets of this function (Secrets tab).
+	 * @param {{ POUCHBASE_URL: string, POUCHBASE_API_KEY: string }} env Variables and secrets of this
+	 *   function (Secrets tab); the API key can send email templates (pb.mail.send of the JS SDK).
 	 */
 	async fetch(request, env) {
 		// The signed-in app user, when the request has a valid token; otherwise null.

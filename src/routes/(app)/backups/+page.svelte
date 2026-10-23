@@ -16,7 +16,6 @@
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
 	import { describeCron } from '#lib/backups/cron.js';
 	import { formatFileSize } from '#lib/files/files.js';
-	import { getAppName } from '#lib/remote/settings.remote.js';
 	import BackupStatusBadge from './backup-status-badge.svelte';
 	import { advanceBackups, discoverBackups, getBackups } from './backups.remote';
 	import CreateBackupDialog from './create-backup-dialog.svelte';
@@ -30,7 +29,7 @@
 	import UploadBackupDialog from './upload-backup-dialog.svelte';
 	import type { Backup, Destination } from './types';
 
-	const [appName, overview] = $derived(await Promise.all([getAppName(), getBackups()]));
+	const overview = $derived(await getBackups());
 
 	const dialogs = Dialog.getDialogs();
 
@@ -123,7 +122,7 @@
 </script>
 
 <svelte:head>
-	<title>Backups · {appName}</title>
+	<title>Backups · Pouchbase</title>
 </svelte:head>
 
 <Topbar.Root>

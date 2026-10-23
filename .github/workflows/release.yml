@@ -7,8 +7,9 @@
 #      see scripts/publish-packages.mjs). They get no git tag or GitHub release, so the repository's
 #      releases stay those of the app.
 #    - when the app's version has no tag yet, it creates the tag and a GitHub release with the
-#      changelog entry as notes, then deploys the app to Cloudflare Workers, builds and pushes the
-#      Docker image (docker.yml) and attaches the single binaries (binaries.yml).
+#      changelog entry as notes, then deploys the app to Cloudflare Workers and attaches the bundle
+#      with which installed Workers update themselves, builds and pushes the Docker image
+#      (docker.yml) and attaches the single binaries (binaries.yml).
 #    - when the site's version has no `site-v<version>` tag yet, it deploys pouchbase.io to
 #      Cloudflare Workers and creates that tag.
 #
@@ -148,7 +149,8 @@ jobs:
     if: needs.release.outputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # Attaches the Worker bundle to the release.
+      contents: write
     steps:
       - name: Check out the release
         uses: actions/checkout@v4
@@ -180,6 +182,15 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      # The files with which installed Workers update themselves from the update dialog
+      # (scripts/worker-bundle.mjs, src/lib/updates.ts).
+      - name: Attach the Worker bundle to the release
+        run: |
+          pnpm exec node scripts/worker-bundle.mjs
+          gh release upload "${{ needs.release.outputs.tag }}" dist/worker/pouchbase-worker.json dist/worker/pouchbase-worker-files.json.gz --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   deploy-site:
     name: Deploy the site

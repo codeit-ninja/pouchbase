@@ -31,16 +31,11 @@ export const createAdmin = form(createAdminSchema, async (data, issue) => {
 	const { services } = requireUser();
 
 	const result = await services.users().create({
-		username: data.username,
 		email: data.email,
 		password: data._password
 	});
 
 	if (result.isErr()) {
-		if (result.error.code === 3003) {
-			invalid(issue.username('This username is already in use'));
-		}
-
 		if (result.error.code === 3004) {
 			invalid(issue.email('This email address is already in use'));
 		}

@@ -127,13 +127,13 @@ Errors have the body `{ "error": { "code": "...", "message": "...", "issues": [.
 
 ## CLI
 
-| Command                                                         |                                                                                           |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `pouchbase-plugin init <dir>`                                   | Create a plugin; the directory name becomes its id.                                       |
-| `pouchbase-plugin validate`                                     | Check the manifest, the files it points to and the imports.                               |
-| `pouchbase-plugin build`                                        | Write the bundle to `dist/`.                                                              |
-| `pouchbase-plugin dev [--port 4510]`                            | Rebuild on every change and serve the plugin from a local registry.                       |
-| `pouchbase-plugin publish [--registry <url>] [--token <token>]` | Build and publish; defaults to `$POUCHBASE_REGISTRY_URL` and `$POUCHBASE_REGISTRY_TOKEN`. |
+| Command                                                         |                                                                                                                                                                                                                 |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pouchbase-plugin init <dir>`                                   | Create a plugin; the directory name becomes its id.                                                                                                                                                             |
+| `pouchbase-plugin validate`                                     | Check the manifest, the files it points to and the imports.                                                                                                                                                     |
+| `pouchbase-plugin build`                                        | Write the bundle to `dist/`.                                                                                                                                                                                    |
+| `pouchbase-plugin dev [--port 4510]`                            | Rebuild on every change and serve the plugin from a local registry.                                                                                                                                             |
+| `pouchbase-plugin publish [--registry <url>] [--token <token>]` | Build and publish; defaults to `$POUCHBASE_REGISTRY_URL` and `$POUCHBASE_REGISTRY_TOKEN`. Create a publish token under **Account** on [pouchbase.io](https://pouchbase.io/account), or upload the bundle there. |
 
 ## License
 

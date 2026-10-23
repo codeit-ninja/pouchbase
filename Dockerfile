@@ -16,13 +16,15 @@ COPY package.json ./
 RUN npm install -g "$(node -p "require('./package.json').packageManager")"
 
 # Install the dependencies of the app and the workspace packages it uses, and build the Node target.
-# Every workspace package.json is copied so the lockfile matches, but the site and the JS SDK aren't
-# installed (`--filter pouchbase...`) and the rest of their files are left out by .dockerignore.
+# Every workspace package.json is copied so the lockfile matches, but the site and the test app
+# aren't installed (`--filter pouchbase...`) and the rest of their files are left out by
+# .dockerignore. The JS SDK is (the dashboard bundles its realtime client), from its sources.
 FROM base AS build
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/plugin-sdk/package.json packages/plugin-sdk/
 COPY packages/js-sdk/package.json packages/js-sdk/
 COPY site/package.json site/
+COPY test-app/package.json test-app/
 RUN pnpm install --frozen-lockfile --ignore-scripts --filter "pouchbase..."
 COPY . .
 ENV POUCHBASE_TARGET=node
@@ -36,13 +38,16 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/plugin-sdk/package.json packages/plugin-sdk/
 COPY packages/js-sdk/package.json packages/js-sdk/
 COPY site/package.json site/
+COPY test-app/package.json test-app/
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts --filter pouchbase
 
 FROM node:26-alpine AS runner
+# POUCHBASE_RUNTIME makes the update dialog show the commands for Docker (src/lib/server/runtime.ts).
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
-    BODY_SIZE_LIMIT=16M
+    BODY_SIZE_LIMIT=16M \
+    POUCHBASE_RUNTIME=docker
 WORKDIR /app
 COPY --chown=node:node --from=dependencies /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/build ./build

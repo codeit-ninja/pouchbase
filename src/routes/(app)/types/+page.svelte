@@ -10,11 +10,10 @@
 	import * as Copy from '#lib/components/ui/inputs/copy/index.js';
 	import * as Page from '#lib/components/ui/page/index.js';
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
-	import { getAppName } from '#lib/remote/settings.remote.js';
 	import RegenerateTokenDialog from './regenerate-token-dialog.svelte';
 	import { getTypes } from './types.remote';
 
-	const [appName, types] = $derived(await Promise.all([getAppName(), getTypes()]));
+	const types = $derived(await getTypes());
 
 	const url = $derived.by(() => {
 		const apiUrl = new URL('/api/types', page.url.origin);
@@ -30,7 +29,7 @@
 </script>
 
 <svelte:head>
-	<title>Types · {appName}</title>
+	<title>Types · Pouchbase</title>
 </svelte:head>
 
 <Topbar.Root>

@@ -1,24 +1,28 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import * as Badge from '#lib/components/ui/badge/index.js';
 	import * as Form from '#lib/components/ui/form/index.js';
 	import * as Icon from '#lib/components/ui/icon/index.js';
 	import * as Logo from '#lib/components/ui/logo/index.js';
 	import * as Navigation from '#lib/components/ui/navigation/index.js';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
-	import { getAppName } from '#lib/remote/settings.remote.js';
+	import { getEnvironment } from '#lib/remote/settings.remote.js';
 	import { currentUser, logout } from '../(auth)/auth.remote';
 	import CollectionsNavigation from './collections-navigation.svelte';
+	import UpdateStatus from './update-status.svelte';
 
-	const [appName, user] = $derived(await Promise.all([getAppName(), currentUser()]));
+	const [environment, user] = $derived(await Promise.all([getEnvironment(), currentUser()]));
 </script>
 
 <Sidebar.Root>
 	<Sidebar.Header>
 		<Logo.Root alt="" />
-		<div class="flex min-w-0 flex-col">
-			<span class="truncate leading-tight font-semibold text-zinc-900">Pouchbase</span>
-			<span class="truncate text-xs text-zinc-500">{appName}</span>
-		</div>
+		<span class="truncate leading-tight font-semibold text-zinc-900">Pouchbase</span>
+		{#if environment === 'development'}
+			<Badge.Root variant="warning" class="ml-auto">Development</Badge.Root>
+		{:else if environment === 'production'}
+			<Badge.Root variant="danger" class="ml-auto">Production</Badge.Root>
+		{/if}
 	</Sidebar.Header>
 
 	<Sidebar.Content>
@@ -49,6 +53,13 @@
 				</Navigation.Item>
 
 				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/mail')}>
+						<Icon.Root icon="lucide:mail" />
+						Mail
+					</Navigation.Link>
+				</Navigation.Item>
+
+				<Navigation.Item>
 					<Navigation.Link href={resolve('/(app)/storage')}>
 						<Icon.Root icon="lucide:hard-drive" />
 						Storage
@@ -63,6 +74,13 @@
 				</Navigation.Item>
 
 				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/environments')}>
+						<Icon.Root icon="lucide:arrow-left-right" />
+						Environments
+					</Navigation.Link>
+				</Navigation.Item>
+
+				<Navigation.Item>
 					<Navigation.Link href={resolve('/(app)/auth')}>
 						<Icon.Root icon="lucide:shield-check" />
 						Authentication
@@ -73,6 +91,13 @@
 					<Navigation.Link href={resolve('/(app)/admins')}>
 						<Icon.Root icon="lucide:user-cog" />
 						Admins
+					</Navigation.Link>
+				</Navigation.Item>
+
+				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/api-keys')}>
+						<Icon.Root icon="lucide:key-round" />
+						API keys
 					</Navigation.Link>
 				</Navigation.Item>
 
@@ -100,11 +125,16 @@
 		</Sidebar.Group>
 	</Sidebar.Content>
 
+	<!-- Loads on its own, so a slow look-up of the latest release never holds up the page. -->
+	<svelte:boundary>
+		<UpdateStatus />
+
+		{#snippet pending()}{/snippet}
+		{#snippet failed()}{/snippet}
+	</svelte:boundary>
+
 	<Sidebar.Footer>
-		<div class="flex min-w-0 flex-1 flex-col">
-			<span class="truncate text-sm font-medium text-zinc-900">{user?.username}</span>
-			<span class="truncate text-xs text-zinc-500">{user?.email}</span>
-		</div>
+		<span class="min-w-0 flex-1 truncate text-sm font-medium text-zinc-900">{user?.email}</span>
 
 		<Form.Root form={logout}>
 			<Form.Submit variant="ghost" size="icon" aria-label="Log out">

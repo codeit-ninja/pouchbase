@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import * as Badge from '#lib/components/ui/badge/index.js';
 	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
 	import * as Button from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -15,6 +16,11 @@
 		name: string;
 		/** Leave it out while the collection loads; the actions are then disabled. */
 		collection?: { id: string; name: string; system: boolean };
+		/**
+		 * The realtime connection that keeps the records up to date: "Live" when open, "Offline" when
+		 * closed, nothing while connecting or when left out.
+		 */
+		live?: 'connecting' | 'open' | 'closed';
 		/** Ids of the selected records; switches the actions to bulk actions. */
 		selected?: string[];
 		onClearSelection?: () => void;
@@ -31,6 +37,7 @@
 	let {
 		name,
 		collection,
+		live,
 		selected = [],
 		onClearSelection,
 		onDeleteSelected,
@@ -57,6 +64,18 @@
 	</Breadcrumb.Root>
 
 	<Topbar.Actions>
+		{#if live === 'open'}
+			<Badge.Root variant="success" title="Changes show up as they are saved">
+				<Icon.Root icon="lucide:radio" />
+				Live
+			</Badge.Root>
+		{:else if live === 'closed'}
+			<Badge.Root variant="outline" title="Not connected; reload to see the latest changes">
+				<Icon.Root icon="lucide:unplug" />
+				Offline
+			</Badge.Root>
+		{/if}
+
 		{#if selected.length}
 			<Button.Root variant="ghost" onclick={onClearSelection}>Clear selection</Button.Root>
 			<Button.Root variant="danger" onclick={onDeleteSelected}>

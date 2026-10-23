@@ -1,9 +1,11 @@
 import { z } from 'zod';
 
 import { OAUTH_PROVIDER_IDS } from '#lib/auth/oauth-providers.js';
+import { ENVIRONMENTS } from '#lib/environments/snapshot.js';
 
 export const generalSettingsSchema = z.object({
-	appName: z.string().trim().min(1, 'Enter a name').max(64, 'Name must be at most 64 characters')
+	/** `none` when the instance doesn't use environments. */
+	environment: z.enum(['none', ...ENVIRONMENTS]).default('none')
 });
 
 export const oauthProviderSchema = z.object({

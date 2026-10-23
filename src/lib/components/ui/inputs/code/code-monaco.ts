@@ -16,12 +16,14 @@ export function loadMonaco() {
 			monaco,
 			{ default: EditorWorker },
 			{ default: TypeScriptWorker },
-			{ default: JsonWorker }
+			{ default: JsonWorker },
+			{ default: HtmlWorker }
 		] = await Promise.all([
 			import('monaco-editor'),
 			import('monaco-editor/editor/editor.worker?worker'),
 			import('monaco-editor/languages/features/typescript/ts.worker?worker'),
-			import('monaco-editor/languages/features/json/json.worker?worker')
+			import('monaco-editor/languages/features/json/json.worker?worker'),
+			import('monaco-editor/languages/features/html/html.worker?worker')
 		]);
 
 		// Language services run in web workers; JavaScript uses the TypeScript one.
@@ -29,6 +31,10 @@ export function loadMonaco() {
 			getWorker(_id, label) {
 				if (label === 'typescript' || label === 'javascript') {
 					return new TypeScriptWorker();
+				}
+
+				if (label === 'html') {
+					return new HtmlWorker();
 				}
 
 				return label === 'json' ? new JsonWorker() : new EditorWorker();

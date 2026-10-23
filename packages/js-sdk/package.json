@@ -20,23 +20,27 @@
 	"files": [
 		"dist"
 	],
-	"bin": {
-		"pouchbase": "./dist/cli.js"
-	},
-	"main": "./dist/index.js",
-	"types": "./dist/index.d.ts",
 	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"default": "./dist/index.js"
-		},
+		".": "./src/index.ts",
 		"./package.json": "./package.json"
 	},
 	"engines": {
 		"node": ">=20"
 	},
 	"publishConfig": {
-		"access": "public"
+		"access": "public",
+		"bin": {
+			"pouchbase": "./dist/cli.js"
+		},
+		"main": "./dist/index.js",
+		"types": "./dist/index.d.ts",
+		"exports": {
+			".": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			},
+			"./package.json": "./package.json"
+		}
 	},
 	"scripts": {
 		"build": "tsdown",

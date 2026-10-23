@@ -20,8 +20,12 @@ Dockerfile
 docker-compose.yml
 .dockerignore
 
-# The site and the JS SDK aren't part of the image; only their package.json (for the lockfile).
+# The site and the test app aren't part of the image; only their package.json (for the lockfile). Of
+# the JS SDK only the sources are needed: the dashboard bundles its realtime client.
 site/*
 !site/package.json
+test-app/*
+!test-app/package.json
 packages/js-sdk/*
 !packages/js-sdk/package.json
+!packages/js-sdk/src

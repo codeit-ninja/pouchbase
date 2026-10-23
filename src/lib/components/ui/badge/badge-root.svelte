@@ -12,6 +12,8 @@
 <script lang="ts">
 	let { variant = 'neutral', href, children, class: className, ...rest }: Props = $props();
 
+	const element = $derived(href !== undefined ? 'a' : rest.onclick ? 'button' : 'span');
+
 	const variants = {
 		neutral: 'border-transparent bg-zinc-100 text-zinc-700',
 		outline: 'border-zinc-300 text-zinc-600',
@@ -29,15 +31,16 @@
 	};
 </script>
 
-<!-- With `href` the badge is a link, e.g. to a related record. -->
+<!-- With `href` the badge is a link, e.g. to a related record; with `onclick` it is a button. -->
 <svelte:element
-	this={href === undefined ? 'span' : 'a'}
+	this={element}
 	{...rest}
 	{href}
+	type={element === 'button' ? 'button' : undefined}
 	class={[
 		'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap [&_svg]:size-3.5',
 		variants[variant],
-		href !== undefined &&
+		element !== 'span' &&
 			`transition-colors focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:outline-none ${links[variant]}`,
 		className
 	]}

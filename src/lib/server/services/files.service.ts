@@ -15,6 +15,7 @@ import { batchDatabase, queryDatabase, queryObjects } from '../db/query';
 import { generateRecordId } from '../crypto';
 import { canProcess, editImage, thumbnail, type EncodedImage, type ImageEdits } from '../images';
 import { Service } from './base.service';
+import { inBackground } from './realtime.service';
 
 /** Fields every file has; they are managed by this service and can't be renamed or deleted. */
 const FILE_FIELDS: CreateFieldInput[] = [
@@ -199,6 +200,7 @@ export class FilesService extends Service {
 								.records()
 								.refreshComputed(FILES_COLLECTION, [stored.id])
 								.orElse(() => okAsync(undefined))
+								.map(() => this.changed('create', stored.id))
 						)
 						.andThen(() => this.generateThumbnails(stored, bytes))
 				);
@@ -240,7 +242,7 @@ export class FilesService extends Service {
 									[stored.mimeType, stored.size, stored.key, Date.now(), id]
 								),
 								(error) => this.error(13005, 'SAVE_FILE_FAILED', error)
-							)
+							).map(() => this.changed('update', id))
 						)
 						.andThen(() =>
 							// The new file is saved; failing to clean up the old one isn't fatal.
@@ -331,7 +333,15 @@ export class FilesService extends Service {
 					(error) => this.error(13005, 'SAVE_FILE_FAILED', error)
 				)
 			)
-			.map(() => ({ ...file, name }));
+			.map(() => {
+				this.changed('update', file.id);
+				return { ...file, name };
+			});
+	}
+
+	/** Sends the realtime event of a file this service wrote directly. */
+	private changed(action: 'create' | 'update', id: string) {
+		inBackground(this.services.records().announceStored(FILES_COLLECTION, action, [id]));
 	}
 
 	/**

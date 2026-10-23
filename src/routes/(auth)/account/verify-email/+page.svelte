@@ -4,25 +4,23 @@
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Form from '#lib/components/ui/form/index.js';
 	import * as Icon from '#lib/components/ui/icon/index.js';
-	import { getAppName } from '#lib/remote/settings.remote.js';
 	import { verifyEmailSchema } from '#lib/schemas/password-auth.js';
 	import { verifyEmail } from '../account.remote';
 
-	const appName = $derived(await getAppName());
 	const token = $derived(page.url.searchParams.get('token') ?? '');
 
 	const form = verifyEmail.preflight(verifyEmailSchema);
 </script>
 
 <svelte:head>
-	<title>Verify email · {appName}</title>
+	<title>Verify email</title>
 </svelte:head>
 
 <main class="mx-auto flex min-h-svh w-full max-w-sm flex-col justify-center px-4 py-12">
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>Verify your email</Card.Title>
-			<Card.Description>Confirm the email address of your {appName} account.</Card.Description>
+			<Card.Description>Confirm the email address of your account.</Card.Description>
 		</Card.Header>
 
 		<Card.Content>

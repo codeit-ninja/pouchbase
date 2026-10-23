@@ -73,6 +73,20 @@ describe('Pouchbase', () => {
 		expect(error).toBeInstanceOf(PouchbaseError);
 		expect(error.status).toBe(0);
 	});
+
+	it('sends the API key instead of the token from a service client', async () => {
+		const { fetch, calls } = mockFetch([200, { id: 'p1', title: 'Hi' }]);
+		const pb = new Pouchbase('https://pb.example.com', {
+			fetch,
+			apiKey: 'pbk_secret',
+			authStore: new AuthStore({ token: token(60), userId: 'u1', user: null })
+		});
+
+		await pb.asService().db.$collection('posts').patch('p1', { title: 'Hi' });
+
+		expect(new Headers(calls[0]!.init.headers).get('Authorization')).toBe('Bearer pbk_secret');
+		expect(() => new Pouchbase('https://pb.example.com').asService()).toThrow(PouchbaseError);
+	});
 });
 
 describe('auth', () => {
@@ -212,6 +226,8 @@ describe('db', () => {
 		published: boolean;
 		tags: string[];
 		meta: JsonValue;
+		author: string | null;
+		comments: string[];
 	}
 
 	interface PostsCreate {
@@ -222,9 +238,26 @@ describe('db', () => {
 		tags?: string[] | null;
 	}
 
+	interface CommentsRecord {
+		id: string;
+		body: string;
+		author: string;
+	}
+
+	type UsersRecord = User & { name: string | null };
+
 	interface Schema {
-		users: { $record: User & { name: string | null }; $create: { name?: string | null } };
-		posts: { $record: PostsRecord; $create: PostsCreate };
+		users: { $record: UsersRecord; $create: { name?: string | null } };
+		posts: {
+			$record: PostsRecord;
+			$create: PostsCreate;
+			$relations: { author: 'users'; comments: 'comments' };
+		};
+		comments: {
+			$record: CommentsRecord;
+			$create: { body: string; author: string };
+			$relations: { author: 'users' };
+		};
 	}
 
 	const page = (items: unknown[], pageNumber = 1, totalPages = 1) => ({
@@ -273,6 +306,23 @@ describe('db', () => {
 			sort: '-created_at,title',
 			fields: 'id,title'
 		});
+	});
+
+	it('compiles include into expand', async () => {
+		const { fetch, calls } = mockFetch([200, { id: 'p1', author: null }], [200, page([])]);
+		const pb = createClient<Schema>('https://pb.example.com', { fetch });
+
+		await pb.db.posts.find('p1', {
+			select: ['title'],
+			include: { author: true, comments: { include: { author: true } } }
+		});
+		await pb.db.posts.findMany({ include: { comments: {} } });
+
+		expect(query(calls[0]?.url)).toEqual({ fields: 'title', expand: 'author,comments.author' });
+		expect(query(calls[1]?.url)).toEqual({ expand: 'comments' });
+		expect(() =>
+			pb.db.$collection('posts').find('p1', { include: { 'author || 1': true } })
+		).toThrow(TypeError);
 	});
 
 	it('compiles in, notIn, isEmpty and empty groups', () => {
@@ -435,6 +485,40 @@ describe('db', () => {
 			void pb.db.posts.find('p1', { select: ['nope'] });
 			// @ts-expect-error: `pages` is not a collection of the schema.
 			void pb.db.pages;
+		}).toBeFunction();
+	});
+
+	it('types included relations from the schema', () => {
+		const pb = createClient<Schema>('https://pb.example.com');
+
+		expectTypeOf(() =>
+			pb.db.posts.find('p1', {
+				select: ['id'],
+				include: { author: true, comments: { include: { author: true } } }
+			})
+		).returns.resolves.toEqualTypeOf<{
+			id: string;
+			author: UsersRecord | null;
+			comments: { id: string; body: string; author: UsersRecord | null }[];
+		} | null>();
+		expectTypeOf(() =>
+			pb.db.comments.findMany({ include: { author: true } })
+		).returns.resolves.toEqualTypeOf<
+			Page<{ id: string; body: string; author: UsersRecord | null }>
+		>();
+
+		// Only type-checked, never run.
+		expectTypeOf(() => {
+			pb.db.comments.subscribe(
+				(event) => {
+					expectTypeOf(event.record.author).toEqualTypeOf<UsersRecord | null>();
+				},
+				{ include: { author: true } }
+			);
+			// @ts-expect-error: `title` is not a relation.
+			void pb.db.posts.find('p1', { include: { title: true } });
+			// @ts-expect-error: comments only relate to `author`.
+			void pb.db.posts.find('p1', { include: { comments: { include: { post: true } } } });
 		}).toBeFunction();
 	});
 });

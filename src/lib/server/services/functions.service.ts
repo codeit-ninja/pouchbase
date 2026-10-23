@@ -8,7 +8,12 @@ import { errAsync, fromPromise, okAsync } from 'neverthrow';
 
 import type { FunctionLanguage } from '#lib/functions/functions.js';
 
-import { functionTemplate, MAX_CODE_SIZE, USER_HEADER } from '#lib/functions/functions.js';
+import {
+	functionTemplate,
+	MAX_CODE_SIZE,
+	RESERVED_ENV_NAMES,
+	USER_HEADER
+} from '#lib/functions/functions.js';
 
 import { generateToken } from '../crypto';
 import { functions, functionVersions } from '../db';
@@ -100,7 +105,12 @@ type LogsFailed = ServiceError<18010, 'LOGS_FAILED'>;
 type LogsForbidden = ServiceError<18011, 'LOGS_FORBIDDEN'>;
 type InvokeFailed = ServiceError<18012, 'INVOKE_FAILED'> & { data: { reason: string } };
 
-type DeployError = QueryFailed | CodeTooLarge | NoSubdomain | DeployFailed;
+type DeployError =
+	| QueryFailed
+	| CodeTooLarge
+	| NoSubdomain
+	| DeployFailed
+	| ServiceError<23000, 'API_KEYS_QUERY_FAILED'>;
 
 /** Headers a caller can't pass on to a function. */
 const STRIPPED_HEADERS = [
@@ -328,9 +338,11 @@ export class FunctionsService extends Service {
 
 	/** Names of the function's secrets; their values can't be read back. */
 	secrets(id: string): ResultAsync<string[], QueryFailed | FunctionNotFound | SecretsFailed> {
-		return this.requireRow(id).andThen((row) =>
-			fromPromise(driver.secrets(scriptName(row.name)), (error) => this.secretsError(error))
-		);
+		return this.requireRow(id)
+			.andThen((row) =>
+				fromPromise(driver.secrets(scriptName(row.name)), (error) => this.secretsError(error))
+			)
+			.map((names) => names.filter((name) => !RESERVED_ENV_NAMES.includes(name)));
 	}
 
 	/** Adds or replaces a secret; the Worker gets a new version with it. */
@@ -518,6 +530,12 @@ export class FunctionsService extends Service {
 				).map(([latest]) => ({ subdomain, number: (latest?.number ?? 0) + 1 }))
 			)
 			.andThen(({ subdomain, number }) =>
+				this.services
+					.apiKeys()
+					.issueFunctionKey(row.id, row.name)
+					.map((apiKey) => ({ subdomain, number, apiKey }))
+			)
+			.andThen(({ subdomain, number, apiKey }) =>
 				fromPromise(
 					(async () => {
 						await driver.deploy(script, {
@@ -528,7 +546,8 @@ export class FunctionsService extends Service {
 							],
 							bindings: [
 								{ type: 'plain_text', name: 'POUCHBASE_URL', text: this.ctx.url.origin },
-								{ type: 'secret_text', name: 'POUCHBASE_FUNCTION_SECRET', text: row.secret }
+								{ type: 'secret_text', name: 'POUCHBASE_FUNCTION_SECRET', text: row.secret },
+								{ type: 'secret_text', name: 'POUCHBASE_API_KEY', text: apiKey.key }
 							],
 							message: `Pouchbase version ${number}`
 						});
@@ -538,9 +557,17 @@ export class FunctionsService extends Service {
 						}
 					})(),
 					deployFailed
-				).map(() => ({ url: `https://${script}.${subdomain}.workers.dev`, number }))
+				)
+					// The key of a version that didn't deploy is of no use.
+					.orElse((error) =>
+						this.services
+							.apiKeys()
+							.deleteFunctionKey(apiKey.id)
+							.andThen(() => errAsync(error))
+					)
+					.map(() => ({ url: `https://${script}.${subdomain}.workers.dev`, number, apiKey }))
 			)
-			.andThen(({ url, number }) =>
+			.andThen(({ url, number, apiKey }) =>
 				fromPromise(
 					(async () => {
 						const now = new Date();
@@ -565,6 +592,17 @@ export class FunctionsService extends Service {
 						return version[0];
 					})(),
 					(error) => this.error(18000, 'FUNCTIONS_QUERY_FAILED', error)
+				).andThen((version) =>
+					// The new version runs with the new key, so the older keys stop working.
+					this.services
+						.apiKeys()
+						.keepFunctionKey(row.id, apiKey.id)
+						.orElse((error) => {
+							console.error(`[functions] could not remove old API keys of ${row.name}`, error);
+
+							return okAsync(undefined);
+						})
+						.map(() => version)
 				)
 			);
 	}

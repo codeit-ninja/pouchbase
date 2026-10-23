@@ -16,15 +16,9 @@
 
 <Card.Content>
 	<Form.Root {form} oninput={() => form.validate()}>
-		<Form.Field field={form.fields.username}>
-			<Form.Label>Username</Form.Label>
-			<Form.Input autocomplete="username" />
-			<Form.Errors />
-		</Form.Field>
-
 		<Form.Field field={form.fields.email}>
 			<Form.Label>Email address</Form.Label>
-			<Form.Input type="email" autocomplete="email" />
+			<Form.Input type="email" autocomplete="username" />
 			<Form.Errors />
 		</Form.Field>
 

@@ -4,25 +4,23 @@
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Form from '#lib/components/ui/form/index.js';
 	import * as Icon from '#lib/components/ui/icon/index.js';
-	import { getAppName } from '#lib/remote/settings.remote.js';
 	import { resetPasswordSchema } from '#lib/schemas/password-auth.js';
 	import { resetPassword } from '../account.remote';
 
-	const appName = $derived(await getAppName());
 	const token = $derived(page.url.searchParams.get('token') ?? '');
 
 	const form = resetPassword.preflight(resetPasswordSchema);
 </script>
 
 <svelte:head>
-	<title>Reset password · {appName}</title>
+	<title>Reset password</title>
 </svelte:head>
 
 <main class="mx-auto flex min-h-svh w-full max-w-sm flex-col justify-center px-4 py-12">
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>Reset password</Card.Title>
-			<Card.Description>Choose a new password for your {appName} account.</Card.Description>
+			<Card.Description>Choose a new password for your account.</Card.Description>
 		</Card.Header>
 
 		<Card.Content>

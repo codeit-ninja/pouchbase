@@ -1,7 +1,7 @@
 import type { ServiceError } from './base.service';
 import type { ResultAsync } from 'neverthrow';
 
-import { asc, eq, or } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { errAsync, fromPromise, okAsync } from 'neverthrow';
 
 import { hashPassword } from '../crypto';
@@ -14,7 +14,6 @@ export type User = typeof users.$inferSelect;
 export type UserSummary = Omit<User, 'passwordHash'>;
 
 export type CreateUserInput = {
-	username: string;
 	email: string;
 	password: string;
 };
@@ -45,13 +44,9 @@ export class UsersService extends Service {
 		);
 	}
 
-	/** Finds a user by username or, when the identity contains an `@`, by email address. */
-	findByIdentity(
-		identity: string
-	): ResultAsync<User | null, ServiceError<3001, 'FIND_USER_FAILED'>> {
-		const column = identity.includes('@') ? users.email : users.username;
-
-		return fromPromise(this.db.select().from(users).where(eq(column, identity)), (error) =>
+	/** Finds a user by email address. */
+	findByEmail(email: string): ResultAsync<User | null, ServiceError<3001, 'FIND_USER_FAILED'>> {
+		return fromPromise(this.db.select().from(users).where(eq(users.email, email)), (error) =>
 			this.error(3001, 'FIND_USER_FAILED', error)
 		).map(([user]) => user ?? null);
 	}
@@ -62,7 +57,6 @@ export class UsersService extends Service {
 			this.db
 				.select({
 					id: users.id,
-					username: users.username,
 					email: users.email,
 					createdAt: users.createdAt
 				})
@@ -72,29 +66,21 @@ export class UsersService extends Service {
 		);
 	}
 
-	/** Creates a user; the username and the email address must not be in use yet. */
+	/** Creates a user; the email address must not be in use yet. */
 	create(
 		input: CreateUserInput
 	): ResultAsync<
 		User,
 		| ServiceError<3001, 'FIND_USER_FAILED'>
 		| ServiceError<3002, 'CREATE_USER_FAILED'>
-		| ServiceError<3003, 'USERNAME_TAKEN'>
 		| ServiceError<3004, 'EMAIL_TAKEN'>
 	> {
 		return fromPromise(
-			this.db
-				.select({ username: users.username, email: users.email })
-				.from(users)
-				.where(or(eq(users.username, input.username), eq(users.email, input.email))),
+			this.db.select({ id: users.id }).from(users).where(eq(users.email, input.email)),
 			(error) => this.error(3001, 'FIND_USER_FAILED', error)
 		)
 			.andThen((existing) => {
-				if (existing.some((user) => user.username === input.username)) {
-					return errAsync(this.error(3003, 'USERNAME_TAKEN'));
-				}
-
-				if (existing.some((user) => user.email === input.email)) {
+				if (existing.length > 0) {
 					return errAsync(this.error(3004, 'EMAIL_TAKEN'));
 				}
 
@@ -106,7 +92,6 @@ export class UsersService extends Service {
 						const [user] = await this.db
 							.insert(users)
 							.values({
-								username: input.username,
 								email: input.email,
 								passwordHash: await hashPassword(input.password)
 							})

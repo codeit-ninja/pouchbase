@@ -75,3 +75,7 @@ export const navigation: (NavGroup | NavLink)[] = [
 export function isGroup(entry: NavGroup | NavLink): entry is NavGroup {
 	return 'links' in entry;
 }
+
+/** The VPS install script (`install.sh` in the repository); see the Docker guide. */
+export const INSTALL_SCRIPT_URL =
+	'https://raw.githubusercontent.com/pouchbase/pouchbase/main/install.sh';

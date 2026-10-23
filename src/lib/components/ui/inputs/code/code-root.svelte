@@ -2,7 +2,7 @@
 	import type { Diagnostic, FilterNames } from './code-filter';
 
 	/** `filter`: the filter syntax of API rules and `?filter=` (`#lib/filter/filter.ts`). */
-	export type Language = 'javascript' | 'typescript' | 'json' | 'sql' | 'filter';
+	export type Language = 'javascript' | 'typescript' | 'json' | 'sql' | 'html' | 'filter';
 
 	/** A suggestion of the editor's autocomplete, also shown when hovering it in the code. */
 	export type Completion = {
@@ -172,6 +172,7 @@
 					typescript: 'ts',
 					json: 'json',
 					sql: 'sql',
+					html: 'html',
 					filter: 'filter'
 				}[settings.language];
 				const model = monaco.editor.createModel(

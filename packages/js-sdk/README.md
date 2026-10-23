@@ -103,6 +103,19 @@ await pb.db.posts.remove(created.id);
 
 Records come back with real values: booleans are `boolean`, JSON fields are parsed, and multiple relations, files and lists are arrays. `insert()` takes the generated `PostsCreate` type: fields Pouchbase fills in (id, timestamps, computed fields) are left out and required fields are required.
 
+**Relations.** Relation and file fields hold ids; `include` returns the related records instead, typed from the collection they point to (`$relations` in the generated `Schema`). It works on every read and on `insert()` and `patch()`, up to three levels deep:
+
+```ts
+const post = await pb.db.posts.find(id, {
+	include: { author: true, comments: { include: { author: true } } }
+});
+
+post?.author; // UsersRecord | null
+post?.comments; // (CommentsRecord & { author: UsersRecord | null })[]
+```
+
+A single relation becomes a record or `null`, a multiple one an array. Related records that the view rule of their collection hides are left out (`null`), and including a collection whose view rule is _Admins only_ fails with `invalid`.
+
 **Hand-written filters.** For what `where` can't express, such as the signed-in user, write the filter with `filter` (the syntax of the API rules); values in `${…}` are escaped:
 
 ```ts
@@ -123,6 +136,29 @@ if (!result.ok) {
 ```
 
 What a caller may do depends on the collection's API rules in the Pouchbase admin: a locked rule fails with `forbidden`, and records a rule doesn't match are left out of lists and are "not found" otherwise (`null` from `find()`, `not_found` from `patch()` and `remove()`). The **API** panel of a collection shows these calls for its fields. Collections that aren't in your schema are reached with `pb.db.$collection('name')`.
+
+### Realtime
+
+Follow changes to records as they are saved, over a WebSocket. You get every create, update and delete that the collection's view rule lets you see:
+
+```ts
+const subscription = pb.db.posts.subscribe(
+	(event) => {
+		event.action; // 'create' | 'update' | 'delete'
+		event.record; // typed by `select`; for a delete, the record as it was
+	},
+	{ where: { status: 'published' }, select: ['id', 'title'] }
+);
+
+await subscription.ready; // rejects with `forbidden`, `not_found` or `invalid`
+subscription.unsubscribe();
+```
+
+Pass `id` to follow one record: `pb.db.posts.subscribe(callback, { id })`, and `include` to get related records instead of ids, as with `find()`: `{ include: { author: true } }`. Without the schema, use `pb.realtime.subscribe('posts', callback)` or `pb.realtime.subscribe('posts/<id>', callback)`.
+
+There is one connection per collection. It opens with the first subscription and closes after the last one. It reconnects by itself, and when `pb.authStore` changes it reconnects as the new user. `onError` in the options reports a subscription that fails later, for example when the rule changed. `pb.realtime.onState()` reports the connection state, e.g. for a "live" indicator.
+
+`globalThis.WebSocket` is used by default (browsers, Node 22 and later, Deno, Bun, Workers). Elsewhere pass one: `new Pouchbase(url, { webSocket: WebSocket })`, for example from the `ws` package.
 
 ### Files
 
@@ -145,6 +181,55 @@ await pb.functions.invoke('orders', { method: 'GET', path: '/42', query: { expan
 ```
 
 The body comes back as parsed JSON, or as text when it isn't JSON. A non-2xx answer throws a `PouchbaseError`.
+
+### Mail
+
+Send the email templates from the **Mail** page of the Pouchbase admin. Sending needs an API key, so it only works from server-side code: a function has its own key in `env.POUCHBASE_API_KEY`; for another back-end, create one on the **API keys** page. Never ship a key to the browser.
+
+```ts
+const pb = new Pouchbase(env.POUCHBASE_URL, { apiKey: env.POUCHBASE_API_KEY });
+
+const { sent } = await pb.mail.send({
+	template: 'welcome',
+	to: 'ada@example.com', // or a list of up to 50; everyone gets an email of their own
+	variables: { name: 'Ada', items: ['Create a project', 'Invite your team'] }
+});
+```
+
+A missing required variable throws a `PouchbaseError` with status `422` and an issue per variable (`issues['variables.name']`); an unknown template is a `404`.
+
+### Service access
+
+A back-end that manages records past the collections' API rules (for example, writing fields users may not change) uses an API key with the **service** scope, created on the **API keys** page. `pb.asService()` returns a client that sends the key instead of the user's token; its records calls act as an admin. Other keys get a `403` from the records API.
+
+```ts
+const pb = new Pouchbase(env.POUCHBASE_URL, { apiKey: env.POUCHBASE_SERVICE_KEY });
+
+await pb.asService().db.posts.patch(id, { featured: true });
+```
+
+### Collections
+
+With an API key with the **service** scope, `pb.collections` manages the schema: collections, their fields, indexes and API rules, and exports and imports them without records, for example in a deploy script.
+
+```ts
+const pb = new Pouchbase(env.POUCHBASE_URL, { apiKey: env.POUCHBASE_SERVICE_KEY });
+
+await pb.collections.create({
+	name: 'posts',
+	fields: [
+		{ name: 'id', type: 'id', options: { generator: 'random' } },
+		{ name: 'title', type: 'text', required: true }
+	],
+	rules: { list: '', view: '' }
+});
+await pb.collections.update('posts', { rules: { create: '@request.auth.id != ""' } });
+
+const file = await pb.collections.export({ collections: ['posts'] });
+const { plan } = await other.collections.import(file, { dryRun: true });
+```
+
+`list()`, `find(name)` (`null` when missing), `create()`, `update(name, input, { force })`, `remove(name)`, `export({ collections })` and `import(file, { removeMissing, force, dryRun })`. Changes that remove fields or data throw a `409` unless you pass `force: true`.
 
 ### Types
 

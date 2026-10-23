@@ -4,19 +4,18 @@
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Page from '#lib/components/ui/page/index.js';
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
-	import { getAppName } from '#lib/remote/settings.remote.js';
 	import { currentUser } from '../(auth)/auth.remote';
 	import { getCloudflareAvailable } from './cloudflare.remote';
 	import CloudflareOverview from './cloudflare-overview.svelte';
 	import { listCollections } from './collections.remote';
 
-	const [appName, user, collections, cloudflare] = $derived(
-		await Promise.all([getAppName(), currentUser(), listCollections(), getCloudflareAvailable()])
+	const [user, collections, cloudflare] = $derived(
+		await Promise.all([currentUser(), listCollections(), getCloudflareAvailable()])
 	);
 </script>
 
 <svelte:head>
-	<title>Dashboard · {appName}</title>
+	<title>Dashboard · Pouchbase</title>
 </svelte:head>
 
 <Topbar.Root>
@@ -31,11 +30,9 @@
 	<div class="mx-auto flex w-full max-w-5xl flex-col gap-10">
 		<Page.Header>
 			<div class="flex flex-col gap-1">
-				<Page.Title>Welcome, {user?.username}</Page.Title>
+				<Page.Title>Welcome, {user?.email}</Page.Title>
 				<Page.Description>
-					Manage the collections of {appName}{cloudflare
-						? ' and keep an eye on its Cloudflare account'
-						: ''}.
+					Manage your collections{cloudflare ? ' and keep an eye on your Cloudflare account' : ''}.
 				</Page.Description>
 			</div>
 		</Page.Header>

@@ -78,6 +78,34 @@
 			"when": 1792776804224,
 			"tag": "0010_plugins",
 			"breakpoints": true
+		},
+		{
+			"idx": 11,
+			"version": "6",
+			"when": 1792788071313,
+			"tag": "0011_environments",
+			"breakpoints": true
+		},
+		{
+			"idx": 12,
+			"version": "6",
+			"when": 1792790106876,
+			"tag": "0012_admins_without_username",
+			"breakpoints": true
+		},
+		{
+			"idx": 13,
+			"version": "6",
+			"when": 1792792463471,
+			"tag": "0013_mail_templates",
+			"breakpoints": true
+		},
+		{
+			"idx": 14,
+			"version": "6",
+			"when": 1792794577748,
+			"tag": "0014_mail_template_preheader",
+			"breakpoints": true
 		}
 	]
 }

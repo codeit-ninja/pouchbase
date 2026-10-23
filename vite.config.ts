@@ -9,6 +9,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, loadEnv } from 'vite';
 import { iconify } from './vite/iconify.ts';
 import { platform } from './vite/platform.ts';
+import { realtime } from './vite/realtime.ts';
 
 /**
  * Pouchbase builds for two targets, chosen with `POUCHBASE_TARGET` (from the environment or `.env`):
@@ -24,6 +25,7 @@ export default defineConfig(({ mode }) => {
 	return {
 		plugins: [
 			platform(target),
+			realtime(),
 			iconify({ sets: [lucide, logos] }),
 			tailwindcss(),
 			sveltekit({

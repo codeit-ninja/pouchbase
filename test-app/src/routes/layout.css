@@ -1,0 +1,109 @@
+:root {
+	color-scheme: light dark;
+	--text: #1c1917;
+	--muted: #78716c;
+	--border: #e7e5e4;
+	--surface: #ffffff;
+	--subtle: #f5f5f4;
+	--background: #fafaf9;
+	--accent: #f6821f;
+	--ok: #16a34a;
+	--danger: #dc2626;
+	font-family: system-ui, sans-serif;
+	color: var(--text);
+	background: var(--background);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--text: #f5f5f4;
+		--muted: #a8a29e;
+		--border: #292524;
+		--surface: #1c1917;
+		--subtle: #292524;
+		--background: #0c0a09;
+	}
+}
+
+body {
+	margin: 0;
+}
+
+input,
+textarea,
+select,
+button {
+	font: inherit;
+	font-size: 0.875rem;
+	color: inherit;
+}
+
+input,
+textarea,
+select {
+	padding: 0.375rem 0.5rem;
+	border: 1px solid var(--border);
+	border-radius: 0.375rem;
+	background: var(--background);
+}
+
+textarea {
+	font-family: ui-monospace, monospace;
+	resize: vertical;
+}
+
+button {
+	padding: 0.375rem 0.75rem;
+	border: 1px solid var(--accent);
+	border-radius: 0.375rem;
+	background: var(--accent);
+	color: #fff;
+	cursor: pointer;
+}
+
+button.ghost {
+	border-color: var(--border);
+	background: transparent;
+	color: inherit;
+}
+
+button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+code,
+pre {
+	font-family: ui-monospace, monospace;
+}
+
+label {
+	display: grid;
+	gap: 0.25rem;
+	font-size: 0.8125rem;
+	color: var(--muted);
+}
+
+.row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: 0.5rem;
+}
+
+.grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+	gap: 1rem;
+}
+
+.stack {
+	display: grid;
+	gap: 0.5rem;
+}
+
+.muted {
+	margin: 0;
+	color: var(--muted);
+	font-size: 0.875rem;
+}

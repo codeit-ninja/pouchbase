@@ -7,21 +7,59 @@ export type { ErrorKind, Pending, Result } from './error.js';
 export { decodeToken, isTokenValid } from './jwt.js';
 export { AuthService } from './services/auth.js';
 export type { OAuthOptions } from './services/auth.js';
+export { CollectionsService } from './services/collections.js';
+export type {
+	ApiRules,
+	CollectionExport,
+	CollectionField,
+	CollectionIndex,
+	CollectionSchema,
+	CreateCollectionInput,
+	FieldInput,
+	FieldOptions,
+	FieldType,
+	ImportOptions,
+	ImportPlan,
+	IndexInput,
+	Severity,
+	ThumbnailSettings,
+	UpdateCollectionInput
+} from './services/collections.js';
 export { FilesService } from './services/files.js';
 export type { FileUrlOptions } from './services/files.js';
 export { FunctionsService } from './services/functions.js';
 export type { InvokeOptions } from './services/functions.js';
+export { MailService } from './services/mail.js';
+export type { SendMailOptions } from './services/mail.js';
 export { CollectionClient } from './services/db.js';
+export { RealtimeService } from './services/realtime.js';
+export type { SubscribeOptions } from './services/realtime.js';
+export { RealtimeConnection } from './realtime/connection.js';
 export type {
+	ConnectionState,
+	RealtimeEvent,
+	RealtimeSubscription,
+	SubscriptionRequest,
+	WebSocketInstance,
+	WebSocketLike
+} from './realtime/connection.js';
+export type { RealtimeAction } from './realtime/protocol.js';
+export type {
+	AnyInclude,
 	AnyRecord,
+	AnyRelations,
 	CallOptions,
+	CollectionSubscribeOptions,
 	CreateOf,
 	Db,
 	FindFirstOptions,
 	FindManyOptions,
+	Include,
+	Included,
 	IterateOptions,
 	Page,
 	RecordOf,
+	RelationsOf,
 	SelectOptions
 } from './services/db.js';
 export { filter } from './query.js';

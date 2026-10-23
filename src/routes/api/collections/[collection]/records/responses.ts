@@ -3,15 +3,23 @@ import type { ServiceError } from '#lib/server/services/base.service.js';
 import { API_RULE_LABELS } from '#lib/filter/rules.js';
 import { json } from '#lib/server/api.js';
 
-/** `?fields=id,title` as a list of names; `undefined` without it. */
-export function requestedFields(url: URL) {
-	const value = url.searchParams.get('fields');
-	const names = value
+/** A comma-separated query parameter as a list; `undefined` without it. */
+function list(url: URL, param: string) {
+	const names = url.searchParams
+		.get(param)
 		?.split(',')
 		.map((name) => name.trim())
 		.filter(Boolean);
 
 	return names?.length ? names : undefined;
+}
+
+/**
+ * What the records API returns of each record: `?fields=id,title` and
+ * `?expand=author,comments.author` (relation fields to replace by their records).
+ */
+export function readOptions(url: URL) {
+	return { fields: list(url, 'fields'), expand: list(url, 'expand') };
 }
 
 /**

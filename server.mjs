@@ -9,7 +9,12 @@
  * form submissions over plain http are rejected as cross-site.
  *
  * It also calls `POST /internal/tick` once a minute, which runs scheduled backups (the Worker uses a
- * Cron Trigger for this instead).
+ * Cron Trigger for this instead), and hands the WebSocket upgrades of `/api/realtime` to the
+ * realtime hub (the Worker uses a Durable Object for this instead).
+ *
+ * The app reads where it runs from `globalThis[Symbol.for('pouchbase.runtime')]` (see
+ * `src/lib/server/runtime.ts`): the binary can update itself from the update dialog, after which
+ * this process restarts it (see `restart()`).
  *
  * Commands: `serve` (the default), `version` and, in the binary, `update` (see `server-update.mjs`);
  * `--help` lists the flags. Flags
@@ -19,6 +24,7 @@
  * default 30), plus the ones the handler reads itself (BODY_SIZE_LIMIT, ADDRESS_HEADER, ...) and the
  * app's own (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, POUCHBASE_INSTANCE, ...).
  */
+import { spawn } from 'node:child_process';
 import { existsSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { isSea } from 'node:sea';
@@ -158,14 +164,29 @@ process.env.PORT_HEADER ??= 'x-forwarded-port';
 // Imported after the variables above are set, because the handler reads them when it loads.
 const { handler } = await import('./build/handler.js');
 
-const server = createServer((request, response) => {
+function forwardOrigin(request) {
 	if (origin) {
 		request.headers['x-forwarded-proto'] = origin.protocol.slice(0, -1);
 		request.headers['x-forwarded-host'] = origin.host;
 		delete request.headers['x-forwarded-port'];
 	}
+}
 
+const server = createServer((request, response) => {
+	forwardOrigin(request);
 	handler(request, response);
+});
+
+// The realtime WebSocket (`/api/realtime`). SvelteKit can't answer upgrades, so they go to the hub
+// that the app made when it loaded (src/lib/server/realtime/node-hub.ts).
+const realtimeHub = Symbol.for('pouchbase.realtime.hub');
+
+server.on('upgrade', (request, socket, head) => {
+	forwardOrigin(request);
+
+	if (!globalThis[realtimeHub]?.upgrade(request, socket, head)) {
+		socket.destroy();
+	}
 });
 
 server.listen(port, host, () => {
@@ -217,16 +238,91 @@ const ticker = setInterval(async () => {
 
 ticker.unref();
 
-function shutdown(signal) {
-	console.log(`Received ${signal}, shutting down`);
+/** Stops serving; open requests get `SHUTDOWN_TIMEOUT` to finish before `done` runs. */
+function stop(done) {
+	let finished = false;
+	const finish = () => {
+		if (!finished) {
+			finished = true;
+			done();
+		}
+	};
+
 	clearInterval(ticker);
-	server.close(() => process.exit(0));
+	// Realtime clients reconnect, to this server once it's back or to another one.
+	globalThis[realtimeHub]?.close();
+	server.close(finish);
 	server.closeIdleConnections();
 	setTimeout(() => {
 		server.closeAllConnections();
-		process.exit(0);
+		finish();
 	}, shutdownTimeout).unref();
+}
+
+function shutdown(signal) {
+	console.log(`Received ${signal}, shutting down`);
+	stop(() => process.exit(0));
 }
 
 process.once('SIGINT', shutdown);
 process.once('SIGTERM', shutdown);
+
+/** Exit code with which a restarted server asks the process that started it for another restart. */
+const RESTART_CODE = 75;
+
+/**
+ * Restarts the server after the binary was replaced. Node can't replace a running process, so the
+ * first restart turns this process into a supervisor that runs the server as a child with the same
+ * arguments, and starts it again whenever it exits with `RESTART_CODE`. A supervised server asks
+ * for that instead of supervising itself, so updates never stack up processes.
+ */
+function restart() {
+	console.log('Restarting to run the new version');
+
+	if (process.env.POUCHBASE_SUPERVISED === '1') {
+		stop(() => process.exit(RESTART_CODE));
+
+		return;
+	}
+
+	stop(() => {
+		let child = null;
+
+		const start = () => {
+			child = spawn(process.execPath, process.argv.slice(2), {
+				stdio: 'inherit',
+				env: { ...process.env, POUCHBASE_SUPERVISED: '1' }
+			});
+
+			child.on('exit', (code, signal) => {
+				if (code === RESTART_CODE) {
+					start();
+
+					return;
+				}
+
+				process.exit(code ?? (signal ? 1 : 0));
+			});
+		};
+
+		// Stopping the supervisor stops the server.
+		for (const signal of ['SIGINT', 'SIGTERM']) {
+			process.removeAllListeners(signal);
+			process.on(signal, () => child?.kill(signal));
+		}
+
+		start();
+	});
+}
+
+globalThis[Symbol.for('pouchbase.runtime')] = isSea()
+	? {
+			kind: 'binary',
+			update: async () => {
+				const { update } = await import('./server-update.mjs');
+
+				return update(pkg.version);
+			},
+			restart
+		}
+	: { kind: process.env.POUCHBASE_RUNTIME === 'docker' ? 'docker' : 'node' };

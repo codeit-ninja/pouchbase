@@ -4,18 +4,24 @@
 	import * as Form from '#lib/components/ui/form/index.js';
 	import * as Page from '#lib/components/ui/page/index.js';
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
-	import { getAppName } from '#lib/remote/settings.remote.js';
+	import { getEnvironment } from '#lib/remote/settings.remote.js';
 	import { generalSettingsSchema } from '#lib/schemas/settings.js';
 	import MailSettings from './mail-settings.svelte';
 	import { updateGeneralSettings } from './settings.remote';
 
-	const appName = $derived(await getAppName());
+	const environment = $derived(await getEnvironment());
+
+	const environments = [
+		{ value: 'none', label: 'Not set' },
+		{ value: 'development', label: 'Development', icon: 'lucide:flask-conical' },
+		{ value: 'production', label: 'Production', icon: 'lucide:rocket' }
+	];
 
 	const generalForm = updateGeneralSettings.preflight(generalSettingsSchema);
 </script>
 
 <svelte:head>
-	<title>Settings · {appName}</title>
+	<title>Settings · Pouchbase</title>
 </svelte:head>
 
 <Topbar.Root>
@@ -37,9 +43,12 @@
 		<Card.Root>
 			<Card.Content>
 				<Form.Root form={generalForm} success="Settings saved">
-					<Form.Field field={generalForm.fields.appName}>
-						<Form.Label>App name</Form.Label>
-						<Form.Input defaultValue={appName} autocomplete="off" />
+					<Form.Field field={generalForm.fields.environment}>
+						<Form.Label>Environment</Form.Label>
+						<Form.Select items={environments} defaultValue={environment ?? 'none'} />
+						<Form.Description>
+							Shown in the sidebar, so you always know which instance you are working on.
+						</Form.Description>
 						<Form.Errors />
 					</Form.Field>
 

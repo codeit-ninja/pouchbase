@@ -1,6 +1,10 @@
 import type { Handle } from '@sveltejs/kit/hooks';
 
 import { error, redirect } from '@sveltejs/kit';
+import { okAsync } from 'neverthrow';
+
+import { json } from '../api';
+import { background } from '../platform/runtime';
 
 const PUBLIC_ROUTES = ['/login'];
 
@@ -14,16 +18,45 @@ const ACCOUNT_ROUTES = ['/account/reset-password', '/account/verify-email'];
 export const guard: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
 	const { services } = event.locals;
+	const isApi = pathname.startsWith('/api/');
 
-	// The health check (Docker, load balancers) answers even when the databases are unreachable.
-	if (pathname === '/api/health') {
+	// The health check (Docker, load balancers) answers even when the databases are unreachable,
+	// and API routes answer preflights themselves (static, no database), so browsers on other
+	// origins get to read the error of the request itself.
+	if (pathname === '/api/health' || (isApi && event.request.method === 'OPTIONS')) {
 		return resolve(event);
 	}
 
-	const result = await services.install().getState();
+	// Errors of the API carry the CORS headers too (SvelteKit's error responses have none), so
+	// client apps see the message instead of a network error.
+	const fail = (status: number, message: string) => {
+		if (isApi) {
+			return json({ message }, status);
+		}
+
+		error(status, message);
+	};
+
+	const result = await services
+		.install()
+		.getState()
+		.andThen((state) =>
+			// `POUCHBASE_ADMIN_EMAIL` and `POUCHBASE_ADMIN_PASSWORD` install it without the wizard.
+			state === 'account'
+				? services
+						.install()
+						.installFromEnv()
+						.map((done) => (done ? 'done' : state))
+				: okAsync(state)
+		);
 
 	if (result.isErr()) {
-		error(500, result.error.message);
+		if (result.error.code === 2002) {
+			return fail(500, `Pouchbase can't install itself: ${result.error.data.reason}`);
+		}
+
+		console.error('[pouchbase] Could not check the installation', result.error);
+		return fail(500, result.error.message);
 	}
 
 	// Installations created by an older version may have pending migrations and miss the
@@ -35,7 +68,7 @@ export const guard: Handle = async ({ event, resolve }) => {
 			.andThen(() => services.auth().ensureUsersCollection());
 
 		if (ready.isErr()) {
-			error(500, ready.error.message);
+			return fail(500, ready.error.message);
 		}
 
 		// Gives the Worker D1 bindings when it has none yet (right after installing, or after a
@@ -47,7 +80,7 @@ export const guard: Handle = async ({ event, resolve }) => {
 				console.error('[pouchbase] Could not add D1 bindings', failure);
 			});
 
-		event.platform?.ctx?.waitUntil(Promise.resolve(attached));
+		background(Promise.resolve(attached));
 	}
 
 	// Remote functions and assets (`/_app/...`) handle their own access.
@@ -56,9 +89,9 @@ export const guard: Handle = async ({ event, resolve }) => {
 	}
 
 	// `/internal/tick` (scheduled work) checks its own token.
-	if (pathname.startsWith('/api/') || pathname.startsWith('/internal/')) {
+	if (isApi || pathname.startsWith('/internal/')) {
 		if (result.value !== 'done') {
-			error(503, 'Pouchbase is not installed yet');
+			return fail(503, 'Pouchbase is not installed yet');
 		}
 
 		return resolve(event);

@@ -1,8 +1,10 @@
 import type { Pouchbase } from '../client.js';
 import { pending, PouchbaseError } from '../error.js';
 import type { Pending } from '../error.js';
-import { compileOrderBy, compileSelect, compileWhere } from '../query.js';
+import { compileInclude, compileOrderBy, compileSelect, compileWhere } from '../query.js';
 import type { FieldName, Filter, OrderBy, Selected, Where } from '../query.js';
+import type { RealtimeEvent, RealtimeSubscription } from '../realtime/connection.js';
+import type { SubscribeOptions } from './realtime.js';
 
 /** A record of a collection without generated types. */
 export type AnyRecord = Record<string, unknown>;
@@ -16,19 +18,83 @@ export type RecordOf<E> = E extends { $record: infer R } ? R : E;
 /** What to send to create a record of a schema entry. */
 export type CreateOf<E> = E extends { $create: infer C } ? C : Partial<RecordOf<E>>;
 
+/**
+ * The collection each relation and file field of a schema entry points to, such as
+ * `{ author: 'users' }` (`$relations` in the generated `Schema`).
+ */
+export type RelationsOf<E> = E extends { $relations: infer L } ? L : Record<never, never>;
+
+/** Relations of a collection that isn't typed: any field name. */
+export type AnyRelations = Record<string, string>;
+
+/** The schema entry of the collection named `N`. */
+type EntryOf<Schema, N> = N extends keyof Schema ? Schema[N] : never;
+
+/** `include` for a collection that isn't typed. */
+export type AnyInclude = { [field: string]: true | { include?: AnyInclude } };
+
+/**
+ * Which relations to return as records instead of ids, typed by the relations `L` of a collection
+ * (see `RelationsOf`): `true`, or `{ include }` to include relations of the related records too, up
+ * to three levels deep.
+ *
+ * ```ts
+ * { author: true, comments: { include: { author: true } } }
+ * ```
+ */
+export type Include<Schema, L> = string extends keyof L
+	? AnyInclude
+	: {
+			[F in keyof L & string]?:
+				true | { include?: Include<Schema, RelationsOf<EntryOf<Schema, L[F]>>> };
+		};
+
+type Simplify<T> = { [K in keyof T]: T[K] } & {};
+
+/** A related record of collection `N`, with the relations in `Option.include` included too. */
+type Related<Schema, N, Option> = Included<
+	RecordOf<EntryOf<Schema, N>>,
+	RecordOf<EntryOf<Schema, N>>,
+	Schema,
+	RelationsOf<EntryOf<Schema, N>>,
+	Option extends { include: infer J } ? J : undefined
+>;
+
+/**
+ * `T` (a record `R` or a selection of it) with the relations in `I` replaced by their records: a
+ * record or `null` for a single relation, an array of records for a multiple one.
+ */
+export type Included<R, T, Schema, L, I> = [I] extends [undefined]
+	? T
+	: string extends keyof L
+		? T
+		: Simplify<
+				Omit<T, keyof I> & {
+					[F in keyof I & keyof L & keyof R]: NonNullable<R[F]> extends readonly unknown[]
+						? Related<Schema, L[F], I[F]>[]
+						: Related<Schema, L[F], I[F]> | null;
+				}
+			>;
+
 /** Options of every request. */
 export type CallOptions = {
 	signal?: AbortSignal;
 };
 
 /** Options for `find()`, `insert()` and `patch()`. */
-export type SelectOptions<S> = CallOptions & {
+export type SelectOptions<S, I = undefined> = CallOptions & {
 	/** Only return these fields; the result type has only them too. */
 	select?: S;
+	/**
+	 * Relations to return as records instead of ids; they are returned even when `select` leaves
+	 * them out. Related records the view rule of their collection hides are left out (`null` for a
+	 * single relation).
+	 */
+	include?: I;
 };
 
 /** Options for `findMany()`. */
-export type FindManyOptions<R, S> = SelectOptions<S> & {
+export type FindManyOptions<R, S, I = undefined> = SelectOptions<S, I> & {
 	/** Which records; all of them without it. */
 	where?: Where<R> | Filter;
 	/** The order; the order of creation without it. */
@@ -40,12 +106,31 @@ export type FindManyOptions<R, S> = SelectOptions<S> & {
 };
 
 /** Options for `findFirst()`. */
-export type FindFirstOptions<R, S> = Omit<FindManyOptions<R, S>, 'limit' | 'page'>;
+export type FindFirstOptions<R, S, I = undefined> = Omit<
+	FindManyOptions<R, S, I>,
+	'limit' | 'page'
+>;
 
 /** Options for `iterate()` and `findAll()`. */
-export type IterateOptions<R, S> = Omit<FindManyOptions<R, S>, 'limit' | 'page'> & {
+export type IterateOptions<R, S, I = undefined> = Omit<
+	FindManyOptions<R, S, I>,
+	'limit' | 'page'
+> & {
 	/** Records per request, 1 to 500. Defaults to 200. */
 	batchSize?: number;
+};
+
+/** Options for `subscribe()`. */
+export type CollectionSubscribeOptions<R, S, I = undefined> = Omit<
+	SubscribeOptions<R>,
+	'select' | 'include'
+> & {
+	/** Only changes to this record. */
+	id?: string;
+	/** Only these fields of each record; the event type has only them too. */
+	select?: S;
+	/** Relations to send as records instead of ids, as in `find()`. */
+	include?: I;
 };
 
 /** One page of `findMany()`. */
@@ -68,13 +153,22 @@ type ListResponse<T> = {
 	items: T[];
 };
 
+/** The selection `S` of record `R`, with the relations in `I` included (see `Included`). */
+type Output<R, S, Schema, L, I> = Included<R, Selected<R, S>, Schema, L, I>;
+
 /**
- * The records of one collection (`/api/collections/<name>/records`), typed by `R` (a record) and
- * `C` (what to send to create one). What a caller may do follows the collection's API rules: a
- * locked rule fails with `forbidden`, and records a rule doesn't match are left out of lists and
- * are "not found" otherwise.
+ * The records of one collection (`/api/collections/<name>/records`), typed by `R` (a record), `C`
+ * (what to send to create one), and the `Schema` with the collections its relations `L` point to
+ * (see `RelationsOf`). What a caller may do follows the collection's API rules: a locked rule
+ * fails with `forbidden`, and records a rule doesn't match are left out of lists and are "not
+ * found" otherwise.
  */
-export class CollectionClient<R = AnyRecord, C = Partial<R>> {
+export class CollectionClient<
+	R = AnyRecord,
+	C = Partial<R>,
+	Schema = Record<never, never>,
+	L = AnyRelations
+> {
 	readonly #pb: Pouchbase<object>;
 	/** Name of the collection. */
 	readonly name: string;
@@ -96,14 +190,14 @@ export class CollectionClient<R = AnyRecord, C = Partial<R>> {
 	 * const post = await pb.db.posts.find(id, { select: ['id', 'title'] });
 	 * ```
 	 */
-	find<const S extends readonly FieldName<R>[] | undefined = undefined>(
-		id: string,
-		options: SelectOptions<S> = {}
-	): Pending<Selected<R, S> | null> {
+	find<
+		const S extends readonly FieldName<R>[] | undefined = undefined,
+		const I extends Include<Schema, L> | undefined = undefined
+	>(id: string, options: SelectOptions<S, I> = {}): Pending<Output<R, S, Schema, L, I> | null> {
 		return pending(
 			this.#pb
-				.send<Selected<R, S>>(this.#path(id), {
-					query: { fields: compileSelect(options.select) },
+				.send<Output<R, S, Schema, L, I>>(this.#path(id), {
+					query: { fields: compileSelect(options.select), expand: compileInclude(options.include) },
 					signal: options.signal
 				})
 				.catch((error: unknown) => {
@@ -123,13 +217,13 @@ export class CollectionClient<R = AnyRecord, C = Partial<R>> {
 	/**
 	 * A record by id; fails with a `not_found` error when there is none.
 	 */
-	findOrThrow<const S extends readonly FieldName<R>[] | undefined = undefined>(
-		id: string,
-		options: SelectOptions<S> = {}
-	): Pending<Selected<R, S>> {
+	findOrThrow<
+		const S extends readonly FieldName<R>[] | undefined = undefined,
+		const I extends Include<Schema, L> | undefined = undefined
+	>(id: string, options: SelectOptions<S, I> = {}): Pending<Output<R, S, Schema, L, I>> {
 		return pending(
-			this.#pb.send<Selected<R, S>>(this.#path(id), {
-				query: { fields: compileSelect(options.select) },
+			this.#pb.send<Output<R, S, Schema, L, I>>(this.#path(id), {
+				query: { fields: compileSelect(options.select), expand: compileInclude(options.include) },
 				signal: options.signal
 			})
 		);
@@ -147,18 +241,20 @@ export class CollectionClient<R = AnyRecord, C = Partial<R>> {
 	 * });
 	 * ```
 	 */
-	findMany<const S extends readonly FieldName<R>[] | undefined = undefined>(
-		options: FindManyOptions<R, S> = {}
-	): Pending<Page<Selected<R, S>>> {
+	findMany<
+		const S extends readonly FieldName<R>[] | undefined = undefined,
+		const I extends Include<Schema, L> | undefined = undefined
+	>(options: FindManyOptions<R, S, I> = {}): Pending<Page<Output<R, S, Schema, L, I>>> {
 		return pending(
 			this.#pb
-				.send<ListResponse<Selected<R, S>>>(this.#path(), {
+				.send<ListResponse<Output<R, S, Schema, L, I>>>(this.#path(), {
 					query: {
 						page: options.page,
 						perPage: options.limit,
 						filter: compileWhere(options.where) || undefined,
 						sort: compileOrderBy(options.orderBy) || undefined,
-						fields: compileSelect(options.select)
+						fields: compileSelect(options.select),
+						expand: compileInclude(options.include)
 					},
 					signal: options.signal
 				})
@@ -173,9 +269,10 @@ export class CollectionClient<R = AnyRecord, C = Partial<R>> {
 	}
 
 	/** The first record that matches, or `null`. */
-	findFirst<const S extends readonly FieldName<R>[] | undefined = undefined>(
-		options: FindFirstOptions<R, S> = {}
-	): Pending<Selected<R, S> | null> {
+	findFirst<
+		const S extends readonly FieldName<R>[] | undefined = undefined,
+		const I extends Include<Schema, L> | undefined = undefined
+	>(options: FindFirstOptions<R, S, I> = {}): Pending<Output<R, S, Schema, L, I> | null> {
 		return pending(this.findMany({ ...options, limit: 1 }).then((page) => page.items[0] ?? null));
 	}
 
@@ -195,14 +292,17 @@ export class CollectionClient<R = AnyRecord, C = Partial<R>> {
 	 * }
 	 * ```
 	 */
-	async *iterate<const S extends readonly FieldName<R>[] | undefined = undefined>(
-		options: IterateOptions<R, S> = {}
-	): AsyncGenerator<Selected<R, S>, void, undefined> {
+	async *iterate<
+		const S extends readonly FieldName<R>[] | undefined = undefined,
+		const I extends Include<Schema, L> | undefined = undefined
+	>(
+		options: IterateOptions<R, S, I> = {}
+	): AsyncGenerator<Output<R, S, Schema, L, I>, void, undefined> {
 		const { batchSize = 200, ...query } = options;
 		const limit = Math.min(Math.max(Math.trunc(batchSize), 1), 500);
 
 		for (let page = 1; ; page++) {
-			const result = await this.findMany<S>({ ...query, limit, page });
+			const result = await this.findMany<S, I>({ ...query, limit, page });
 
 			yield* result.items;
 
@@ -213,14 +313,15 @@ export class CollectionClient<R = AnyRecord, C = Partial<R>> {
 	}
 
 	/** Every record that matches, in one array (see `iterate()` for large collections). */
-	findAll<const S extends readonly FieldName<R>[] | undefined = undefined>(
-		options: IterateOptions<R, S> = {}
-	): Pending<Selected<R, S>[]> {
+	findAll<
+		const S extends readonly FieldName<R>[] | undefined = undefined,
+		const I extends Include<Schema, L> | undefined = undefined
+	>(options: IterateOptions<R, S, I> = {}): Pending<Output<R, S, Schema, L, I>[]> {
 		return pending(
 			(async () => {
-				const items: Selected<R, S>[] = [];
+				const items: Output<R, S, Schema, L, I>[] = [];
 
-				for await (const item of this.iterate<S>(options)) {
+				for await (const item of this.iterate<S, I>(options)) {
 					items.push(item);
 				}
 
@@ -237,15 +338,15 @@ export class CollectionClient<R = AnyRecord, C = Partial<R>> {
 	 * const post = await pb.db.posts.insert({ title: 'Hello', published: true });
 	 * ```
 	 */
-	insert<const S extends readonly FieldName<R>[] | undefined = undefined>(
-		data: C,
-		options: SelectOptions<S> = {}
-	): Pending<Selected<R, S>, FieldName<C>> {
+	insert<
+		const S extends readonly FieldName<R>[] | undefined = undefined,
+		const I extends Include<Schema, L> | undefined = undefined
+	>(data: C, options: SelectOptions<S, I> = {}): Pending<Output<R, S, Schema, L, I>, FieldName<C>> {
 		return pending(
-			this.#pb.send<Selected<R, S>>(this.#path(), {
+			this.#pb.send<Output<R, S, Schema, L, I>>(this.#path(), {
 				method: 'POST',
 				body: data,
-				query: { fields: compileSelect(options.select) },
+				query: { fields: compileSelect(options.select), expand: compileInclude(options.include) },
 				signal: options.signal
 			})
 		);
@@ -255,18 +356,53 @@ export class CollectionClient<R = AnyRecord, C = Partial<R>> {
 	 * Changes the given fields of a record and returns it; other fields keep their value. Fails
 	 * with `not_found` when the record doesn't exist or the update rule doesn't allow it.
 	 */
-	patch<const S extends readonly FieldName<R>[] | undefined = undefined>(
+	patch<
+		const S extends readonly FieldName<R>[] | undefined = undefined,
+		const I extends Include<Schema, L> | undefined = undefined
+	>(
 		id: string,
 		data: Partial<C>,
-		options: SelectOptions<S> = {}
-	): Pending<Selected<R, S>, FieldName<C>> {
+		options: SelectOptions<S, I> = {}
+	): Pending<Output<R, S, Schema, L, I>, FieldName<C>> {
 		return pending(
-			this.#pb.send<Selected<R, S>>(this.#path(id), {
+			this.#pb.send<Output<R, S, Schema, L, I>>(this.#path(id), {
 				method: 'PATCH',
 				body: data,
-				query: { fields: compileSelect(options.select) },
+				query: { fields: compileSelect(options.select), expand: compileInclude(options.include) },
 				signal: options.signal
 			})
+		);
+	}
+
+	/**
+	 * Calls `callback` with every change to the records of this collection (or to record `id`) that
+	 * the view rule lets you see, as they are saved. See `pb.realtime`.
+	 *
+	 * ```ts
+	 * const subscription = pb.db.posts.subscribe((event) => console.log(event.action, event.record), {
+	 * 	where: { status: 'published' },
+	 * 	select: ['id', 'title']
+	 * });
+	 * subscription.unsubscribe();
+	 * ```
+	 */
+	subscribe<
+		const S extends readonly FieldName<R>[] | undefined = undefined,
+		const I extends Include<Schema, L> | undefined = undefined
+	>(
+		callback: (event: RealtimeEvent<Output<R, S, Schema, L, I>>) => void,
+		options: CollectionSubscribeOptions<R, S, I> = {}
+	): RealtimeSubscription {
+		const { id, select, include, ...rest } = options;
+
+		return this.#pb.realtime.subscribe<Output<R, S, Schema, L, I>>(
+			id === undefined ? this.name : `${this.name}/${id}`,
+			callback,
+			{
+				...rest,
+				select: select as readonly string[] | undefined,
+				include: include as AnyInclude | undefined
+			} as SubscribeOptions<Output<R, S, Schema, L, I>>
 		);
 	}
 
@@ -288,7 +424,12 @@ export class CollectionClient<R = AnyRecord, C = Partial<R>> {
  * aren't in the schema are reached with `pb.db.$collection(name)`.
  */
 export type Db<S> = {
-	readonly [K in keyof S & string]: CollectionClient<RecordOf<S[K]>, CreateOf<S[K]>>;
+	readonly [K in keyof S & string]: CollectionClient<
+		RecordOf<S[K]>,
+		CreateOf<S[K]>,
+		S,
+		RelationsOf<S[K]>
+	>;
 } & {
 	/** A collection by name, typed by hand (or untyped). */
 	$collection<R = AnyRecord, C = Partial<R>>(name: string): CollectionClient<R, C>;

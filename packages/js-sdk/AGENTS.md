@@ -42,13 +42,23 @@ Sign-ins return `{ token, user_id }`; the token is a JWT (HS256, 7 days) sent as
 | `GET /api/auth/oauth2/<provider>?state=…&challenge=…` | `pb.auth.signInWithOAuth()` (popup)  |
 | `POST /api/auth/oauth2/result`                        | `pb.auth.signInWithOAuth()` (polls)  |
 | `GET /api/auth/me`                                    | `pb.auth.me()`                       |
-| `GET /api/collections/<name>/records?page&perPage&sort&filter&fields` | `pb.db.<name>.findMany()`, `findFirst()`, `count()`, `iterate()`, `findAll()` |
-| `GET /api/collections/<name>/records/<id>?fields`     | `pb.db.<name>.find()`, `findOrThrow()` |
-| `POST /api/collections/<name>/records?fields`         | `pb.db.<name>.insert()`              |
-| `PATCH /api/collections/<name>/records/<id>?fields`   | `pb.db.<name>.patch()`               |
+| `GET /api/collections/<name>/records?page&perPage&sort&filter&fields&expand` | `pb.db.<name>.findMany()`, `findFirst()`, `count()`, `iterate()`, `findAll()` |
+| `GET /api/collections/<name>/records/<id>?fields&expand` | `pb.db.<name>.find()`, `findOrThrow()` |
+| `POST /api/collections/<name>/records?fields&expand`  | `pb.db.<name>.insert()`              |
+| `PATCH /api/collections/<name>/records/<id>?fields&expand` | `pb.db.<name>.patch()`               |
 | `DELETE /api/collections/<name>/records/<id>` (`204`) | `pb.db.<name>.remove()`              |
+| `GET /api/realtime?collection=<name>` (WebSocket; protocol mirrored in `src/realtime/protocol.ts`) | `pb.realtime.subscribe()`, `pb.db.<name>.subscribe()` |
 | `GET /api/files/<id>`                                 | `pb.files.url()`                     |
 | `<method> /api/functions/<name>/<path>`               | `pb.functions.invoke()`              |
+| `POST /api/mail/send` (API key as `Bearer pbk_…`)    | `pb.mail.send()` (needs `apiKey`)    |
+| Records API with a `service` API key (`Bearer pbk_…`; API rules skipped, other keys `403`) | `pb.asService().db.<name>…` (needs `apiKey`) |
+| `GET /api/collections` (service API key)              | `pb.collections.list()` (needs `apiKey`) |
+| `GET /api/collections/<name>` (service API key)       | `pb.collections.find()`              |
+| `POST /api/collections` (`201`)                       | `pb.collections.create()`            |
+| `PATCH /api/collections/<name>?force`                 | `pb.collections.update()`            |
+| `DELETE /api/collections/<name>` (`204`)              | `pb.collections.remove()`            |
+| `GET /api/collections/export?collections=a,b`         | `pb.collections.export()`            |
+| `POST /api/collections/import?removeMissing&force&dryRun` | `pb.collections.import()`        |
 | `GET /api/types?token=…` (text, not JSON)             | `fetchTypes()`, `pouchbase types`    |
 
 ## Code style

@@ -1,22 +1,25 @@
 import type { RequestHandler } from './$types';
 
-import { json, noContent, preflight, requestUser } from '#lib/server/api.js';
+import { json, noContent, preflight, requestAccess } from '#lib/server/api.js';
 import { readJsonObject } from '#lib/server/api-body.js';
 
-import { errorResponse, requestedFields } from '../responses';
+import { errorResponse, readOptions } from '../responses';
 
-/** One record (only `?fields=` when given), when the view rule allows it; otherwise `404`. */
+/**
+ * One record (only `?fields=` when given, with the relations in `?expand=` replaced by their
+ * records), when the view rule allows it; otherwise `404`.
+ */
 export const GET: RequestHandler = async (event) => {
 	const { params, url, locals } = event;
-	const caller = await requestUser(event);
+	const caller = await requestAccess(event);
 
 	if ('response' in caller) {
 		return caller.response;
 	}
 
 	const result = await locals.services.records().apiGet(params.collection, params.id, {
-		access: { auth: caller.user },
-		fields: requestedFields(url)
+		access: caller.access,
+		...readOptions(url)
 	});
 
 	if (result.isErr()) {
@@ -42,7 +45,7 @@ export const PATCH: RequestHandler = async (event) => {
 		return json({ message: 'Send a JSON object with the fields to change' }, 400);
 	}
 
-	const caller = await requestUser(event);
+	const caller = await requestAccess(event);
 
 	if ('response' in caller) {
 		return caller.response;
@@ -50,7 +53,7 @@ export const PATCH: RequestHandler = async (event) => {
 
 	const result = await locals.services
 		.records()
-		.apiUpdate(params.collection, params.id, body, { auth: caller.user }, requestedFields(url));
+		.apiUpdate(params.collection, params.id, body, caller.access, readOptions(url));
 
 	if (result.isErr()) {
 		return errorResponse(result.error, 'Could not update the record');
@@ -62,7 +65,7 @@ export const PATCH: RequestHandler = async (event) => {
 /** Deletes a record when the collection's delete rule allows it (otherwise `404`) → `204`. */
 export const DELETE: RequestHandler = async (event) => {
 	const { params, locals } = event;
-	const caller = await requestUser(event);
+	const caller = await requestAccess(event);
 
 	if ('response' in caller) {
 		return caller.response;
@@ -70,7 +73,7 @@ export const DELETE: RequestHandler = async (event) => {
 
 	const result = await locals.services
 		.records()
-		.delete(params.collection, [params.id], { access: { auth: caller.user } });
+		.delete(params.collection, [params.id], { access: caller.access });
 
 	if (result.isErr()) {
 		return errorResponse(result.error, 'Could not delete the record');

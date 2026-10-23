@@ -6,7 +6,7 @@ import { CLOUDFLARE_API_TOKEN } from '$app/env/private';
 
 import { json } from '#lib/server/api.js';
 
-/** How long one tick may run steps of backups and restores. */
+/** How long one tick may run steps of backups and restores, and then of deployments. */
 const BUDGET = 25 * 1000;
 
 /**
@@ -36,5 +36,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		error(500, result.error.message);
 	}
 
-	return json({ backups: result.value });
+	// Publishes from another instance continue when that instance stopped driving them.
+	const deployments = await locals.services.environments().advance(BUDGET);
+
+	if (deployments.isErr()) {
+		console.error('[tick] deployments failed', deployments.error);
+		error(500, deployments.error.message);
+	}
+
+	return json({ backups: result.value, deployments: deployments.value });
 };

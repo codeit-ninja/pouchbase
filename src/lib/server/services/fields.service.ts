@@ -53,6 +53,8 @@ export type CreateFieldInput = {
 	options: FieldOptions;
 	/** Fields of built-in collections; they can't be renamed or deleted. */
 	system?: boolean;
+	/** Id of the new field; a publish keeps the id the field has on the development instance. */
+	id?: string;
 };
 
 /** Valid `accept` rules, and `maxSize` only when it is below the global upload limit. */
@@ -90,6 +92,12 @@ type ComputeFailedError = ServiceError<7016, 'COMPUTE_FAILED'> & { data: { messa
 function isUniqueViolation(error: unknown) {
 	const message = error instanceof Error ? error.message : String(error);
 	return message.includes('UNIQUE constraint failed');
+}
+
+/** SQLite refused to add a column because the table already has it. */
+function isDuplicateColumn(error: unknown) {
+	const message = error instanceof Error ? error.message : String(error);
+	return message.includes('duplicate column name');
 }
 
 /** Columns a computed field's script can read: everything except blobs, which can be large. */
@@ -386,7 +394,7 @@ export class FieldsService extends Service {
 					.andThen((appDatabase) =>
 						fromPromise(
 							(async () => {
-								const id = crypto.randomUUID();
+								const id = input.id ?? crypto.randomUUID();
 								const table = `"${collection.name}"`;
 
 								if (options.defaultSql) {
@@ -404,10 +412,19 @@ export class FieldsService extends Service {
 								} else if (input.type === 'id') {
 									await this.addPrimaryKey(appDatabase.id, collection, input);
 								} else {
-									await queryDatabase(
-										appDatabase.id,
-										`ALTER TABLE ${table} ADD COLUMN ${columnSql(input)}`
-									);
+									try {
+										await queryDatabase(
+											appDatabase.id,
+											`ALTER TABLE ${table} ADD COLUMN ${columnSql(input)}`
+										);
+									} catch (error) {
+										// The field doesn't exist, so a column with its name was left by an earlier
+										// attempt that was cut off before it saved the field (e.g. a first install
+										// that hit the Worker's subrequest limit). The field takes it over.
+										if (!isDuplicateColumn(error)) {
+											throw error;
+										}
+									}
 								}
 
 								// Keeps the table and the field list in sync when a later step fails.

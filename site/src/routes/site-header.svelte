@@ -58,6 +58,10 @@
 				</Button.Root>
 			</span>
 
+			<span class="hidden sm:contents">
+				<Button.Root variant="ghost" href={resolve('/account')}>Account</Button.Root>
+			</span>
+
 			<Button.Root variant="brand" href={resolve('/docs/getting-started')}>Get started</Button.Root>
 
 			<Button.Root
@@ -121,6 +125,10 @@
 				onclick={() => (menuOpen = false)}
 			>
 				Get started
+			</Button.Root>
+
+			<Button.Root variant="ghost" href={resolve('/account')} onclick={() => (menuOpen = false)}>
+				Account
 			</Button.Root>
 		</Sheet.Footer>
 	</Sheet.Content>

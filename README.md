@@ -23,8 +23,9 @@
 
 - Collections, fields and indexes, managed from the admin interface. A records API is planned.
 - Built-in user management with username and password sign-in and OAuth (Google, GitHub, Microsoft, Discord and Twitch).
+- Realtime: apps follow changes to records over a WebSocket, filtered by each collection's view rule.
 - A built-in `files` collection for uploads.
-- A setup wizard that creates the databases and the first admin account.
+- An install page that creates the databases and the first admin account, or an install from `POUCHBASE_ADMIN_EMAIL` and `POUCHBASE_ADMIN_PASSWORD`.
 - A dashboard that shows the Cloudflare resources of the installation, the Worker and its bindings, usage graphs and how close the account is to the limits of its plan.
 - The data lives on Cloudflare: D1 for the databases, R2 for files. The app runs as a Cloudflare Worker or as a Node server on your own machine, for example with Docker.
 - Backups of the databases (and optionally the uploaded files) to any S3-compatible bucket, right away or on a schedule, and restores from them.
@@ -64,6 +65,16 @@ Requirements: Node 22 or later and pnpm 10 (`corepack enable`).
 
 4. Open the Worker URL.
 
+### Install script (VPS)
+
+On a fresh Linux server, `install.sh` installs Docker, asks for the Cloudflare credentials (and checks them), and starts Pouchbase with Docker Compose in `/opt/pouchbase`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pouchbase/pouchbase/main/install.sh | sudo bash
+```
+
+With a domain name, Caddy runs in front of Pouchbase and gets an HTTPS certificate from Let's Encrypt (point an A record to the server first); without one, Pouchbase only listens on localhost, to reach through an SSH tunnel. Run the script again to change the settings or update to the latest image. Setting `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` and `POUCHBASE_DOMAIN` (or `none`) skips the questions; `POUCHBASE_DIR` and `POUCHBASE_VERSION` change the directory and the image tag.
+
 ### Docker Compose
 
 Requirements: Docker with Compose, and the `.env` file from above next to `docker-compose.yml` (Compose reads the credentials from it).
@@ -88,15 +99,17 @@ docker run -d --name pouchbase -p 3000:3000 \
   ghcr.io/pouchbase/pouchbase:latest
 ```
 
-| Variable                | Default     | Description                                                                                                                |
-| ----------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `CLOUDFLARE_ACCOUNT_ID` | –           | Cloudflare account that holds the D1 databases and the R2 bucket                                                           |
-| `CLOUDFLARE_API_TOKEN`  | –           | API token with the permissions listed above                                                                                |
-| `ORIGIN`                | –           | Public URL of the instance, used for redirects and OAuth callbacks                                                         |
-| `PORT`                  | `3000`      | Port the server listens on                                                                                                 |
-| `BODY_SIZE_LIMIT`       | `16M`       | Largest accepted request body (uploads are limited to 10 MB by the app)                                                    |
-| `POUCHBASE_INSTANCE`    | `pouchbase` | Name of the instance on the Cloudflare account (see [Several instances on one account](#several-instances-on-one-account)) |
-| `POUCHBASE_LOG_TIMING`  | `false`     | `true` logs the duration of every request and database round-trip                                                          |
+| Variable                   | Default     | Description                                                                                                                                  |
+| -------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID`    | –           | Cloudflare account that holds the D1 databases and the R2 bucket                                                                             |
+| `CLOUDFLARE_API_TOKEN`     | –           | API token with the permissions listed above                                                                                                  |
+| `ORIGIN`                   | –           | Public URL of the instance, used for redirects and OAuth callbacks                                                                           |
+| `PORT`                     | `3000`      | Port the server listens on                                                                                                                   |
+| `BODY_SIZE_LIMIT`          | `16M`       | Largest accepted request body (uploads are limited to 10 MB by the app)                                                                      |
+| `POUCHBASE_INSTANCE`       | `pouchbase` | Name of the instance on the Cloudflare account (see [Several instances on one account](#several-instances-on-one-account))                   |
+| `POUCHBASE_ADMIN_EMAIL`    | –           | Email address of the first admin; with `POUCHBASE_ADMIN_PASSWORD` it installs itself (see [How installation works](#how-installation-works)) |
+| `POUCHBASE_ADMIN_PASSWORD` | –           | Password of the first admin, at least 10 characters                                                                                          |
+| `POUCHBASE_LOG_TIMING`     | `false`     | `true` logs the duration of every request and database round-trip                                                                            |
 
 The image answers a health check at `/api/health`. The same build runs without Docker on Node 26 or later: `pnpm install`, `pnpm build:node`, then `node server.mjs` with the variables above. Behind a reverse proxy that sends `x-forwarded-proto` and `x-forwarded-host`, `ORIGIN` can be left out.
 
@@ -124,7 +137,16 @@ Every instance finds its data through its system database, which is named after 
 ./pouchbase-linux-x64 serve --port=3002 --instance=blog
 ```
 
-On Workers the instance name is the Worker's name as well, so deploy each instance under its own name and pass the same value: `pnpm wrangler deploy --name shop --var POUCHBASE_INSTANCE:shop --secrets-file .env`.
+On Workers the instance name is the Worker's name as well, so deploy each instance under its own name and pass the same value: `pnpm wrangler deploy --name shop --var POUCHBASE_INSTANCE:shop --secrets-file .env`. The Worker finds itself by that name to add its D1 bindings; under another name it keeps using the slower REST API and logs a warning. Keep `POUCHBASE_INSTANCE` out of the secrets file, or the secret and the variable collide.
+
+### Updating
+
+The bottom of the sidebar shows the version of Pouchbase, and **Update to …** when GitHub has a newer release (looked up at most every six hours; **Check now** in the dialog looks it up right away). How the update dialog updates depends on where Pouchbase runs:
+
+- **Cloudflare Workers**: **Update now** deploys the release to the Worker itself, keeping its D1 bindings, secrets and variables. Every release carries the Worker bundle for this (`pouchbase-worker.json` and `pouchbase-worker-files.json.gz`, made by `scripts/worker-bundle.mjs`). The browser downloads it through the Worker and uploads the static assets Cloudflare doesn't have yet in parts, so no request of the Worker does much work, also on the Free plan.
+- **Single binary**: **Update now** replaces the binary with the release for its platform and restarts it (the same as `pouchbase update` and a restart). The first restart turns the process into a small supervisor that runs the server as a child, so it keeps working without a service manager.
+- **Docker**: the dialog shows the command to run on the server: `cd /opt/pouchbase && docker compose pull && docker compose up -d` (or run the install script again).
+- **Node from source**: pull, `pnpm install`, `pnpm build:node` and restart `node server.mjs`.
 
 ## Development
 
@@ -155,12 +177,12 @@ Pouchbase is built with SvelteKit (Svelte 5, TypeScript), bits-ui and Drizzle OR
 
 ## How installation works
 
-On first launch the app redirects to `/install`, a two-step wizard:
+On first launch the app redirects to `/install`, which asks for the email address and password of the first admin. It creates two D1 databases through the Cloudflare API and then the admin account, and logs you in right away:
 
-1. **Account**: creates two D1 databases through the Cloudflare API and then the admin account. You are logged in right away.
-   - the **system database** (users, sessions, settings), named after the instance: `pouchbase` unless `POUCHBASE_INSTANCE` says otherwise. Its migrations come from `./drizzle`.
-   - the **app database**, with a random name like `pb-k3x9q0w2m7a1`. It holds the data of the app you build on Pouchbase. Its id and name are stored in the system database's `settings` (`app_database_id`, `app_database_name`).
-2. **App settings**: choose the app name. This completes the installation.
+- the **system database** (admins, sessions, settings), named after the instance: `pouchbase` unless `POUCHBASE_INSTANCE` says otherwise. Its migrations come from `./drizzle`.
+- the **app database**, with a random name like `pb-k3x9q0w2m7a1`. It holds the data of the app you build on Pouchbase. Its id and name are stored in the system database's `settings` (`app_database_id`, `app_database_name`).
+
+With `POUCHBASE_ADMIN_EMAIL` and `POUCHBASE_ADMIN_PASSWORD` set, Pouchbase installs itself with that admin on the first request instead, without the install page (for Docker, CI and test setups). Once it is installed, both are ignored. Admins log in with their email address.
 
 The databases are created during installation, so `wrangler.jsonc` has **no D1 binding**. Queries go through the D1 HTTP API using `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (see `src/env.ts` and `src/lib/server/platform/cloudflare/`), which is what lets the same app run on a Worker and on your own server. On Workers they are stored as secrets (see [Self-hosting](#self-hosting)).
 
@@ -184,32 +206,49 @@ Verification and password reset emails need mail settings (**Settings → Mail**
 - **Cloudflare Email Service**: uses the app's own `CLOUDFLARE_API_TOKEN`, which then also needs **Email Sending: Edit**. Onboard the sender's domain under Email Service → Email Sending first. Pouchbase uses the REST API here, on every runtime: the Email Service SMTP endpoint (`smtp.mx.cloudflare.net`) is on Cloudflare's own IP ranges, which Workers can't open sockets to.
 - **SMTP server**: any provider, with TLS (port 465), STARTTLS (587) or no encryption. Workers can't connect to port 25.
 
-With mail set up, a sign-up with an email address sends a verification email. The links open pages of Pouchbase itself (`/account/verify-email`, `/account/reset-password`); reset links are valid for 30 minutes and work once, verification links for 3 days.
+With mail set up, a sign-up with an email address sends a verification email. The links open pages of Pouchbase itself (`/account/verify-email`, `/account/reset-password`); reset links are valid for 30 minutes and work once, verification links for 3 days. Both emails can be changed under **System → Mail** (see [Email templates](#email-templates)).
 
 ### Public API
 
 Every sign-in returns `{ token, user_id }`. Send the token as `Authorization: Bearer <token>`; it is a JWT (HS256), valid for 7 days. The API can be called from any origin.
 
-| Request                                               | Purpose                                                                       |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `GET /api/auth/providers`                             | Active OAuth providers: `[{ "provider": "github", "label": "GitHub" }]`       |
-| `POST /api/auth/password/sign-up`                     | `{ username, password, email?, name? }`; `400`/`409` with `issues` per field  |
-| `POST /api/auth/password/sign-in`                     | `{ identity, password }` (username or email); `401` for wrong credentials     |
-| `POST /api/auth/password/request-reset`               | `{ email }`; emails a reset link (same answer for unknown addresses)          |
-| `POST /api/auth/password/confirm-reset`               | `{ token, password }`; `400` for an invalid or expired link                   |
-| `POST /api/auth/verification/request`                 | `{ email }`; emails a verification link                                       |
-| `POST /api/auth/verification/confirm`                 | `{ token }`; marks the user as `verified`                                     |
-| `GET /api/auth/oauth2/<provider>?state=…&challenge=…` | Opened in a popup; starts an OAuth sign-in                                    |
-| `POST /api/auth/oauth2/result`                        | `{ state, verifier }`: `202` while pending, then the result once              |
-| `GET /api/auth/me`                                    | The signed-in user, or `401`                                                  |
-| `GET /api/collections/<name>/records`                 | Records the list rule allows; `?page`, `perPage`, `sort`, `filter`            |
-| `GET /api/collections/<name>/records/<id>`            | One record, when the view rule allows it                                      |
-| `POST /api/collections/<name>/records`                | `{ <field>: value }`; creates a record when the create rule allows it         |
-| `PATCH /api/collections/<name>/records/<id>`          | Changes the given fields, when the update rule allows it                      |
-| `DELETE /api/collections/<name>/records/<id>`         | Deletes a record when the delete rule allows it; `204`                        |
-| `GET /api/files/<id>`                                 | A file from the `files` collection (public; ids are random)                   |
-| `GET /api/types?token=…`                              | TypeScript types of every collection; the URL is on the **Types** page        |
-| `<any method> /api/functions/<name>/<path>`           | Calls a [function](#functions); `401` when it requires sign-in, `404` if none |
+| Request                                               | Purpose                                                                        |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `GET /api/auth/providers`                             | Active OAuth providers: `[{ "provider": "github", "label": "GitHub" }]`        |
+| `POST /api/auth/password/sign-up`                     | `{ username, password, email?, name? }`; `400`/`409` with `issues` per field   |
+| `POST /api/auth/password/sign-in`                     | `{ identity, password }` (username or email); `401` for wrong credentials      |
+| `POST /api/auth/password/request-reset`               | `{ email }`; emails a reset link (same answer for unknown addresses)           |
+| `POST /api/auth/password/confirm-reset`               | `{ token, password }`; `400` for an invalid or expired link                    |
+| `POST /api/auth/verification/request`                 | `{ email }`; emails a verification link                                        |
+| `POST /api/auth/verification/confirm`                 | `{ token }`; marks the user as `verified`                                      |
+| `GET /api/auth/oauth2/<provider>?state=…&challenge=…` | Opened in a popup; starts an OAuth sign-in                                     |
+| `POST /api/auth/oauth2/result`                        | `{ state, verifier }`: `202` while pending, then the result once               |
+| `GET /api/auth/me`                                    | The signed-in user, or `401`                                                   |
+| `GET /api/collections/<name>/records`                 | Records the list rule allows; `?page`, `perPage`, `sort`, `filter`             |
+| `GET /api/collections/<name>/records/<id>`            | One record, when the view rule allows it                                       |
+| `POST /api/collections/<name>/records`                | `{ <field>: value }`; creates a record when the create rule allows it          |
+| `PATCH /api/collections/<name>/records/<id>`          | Changes the given fields, when the update rule allows it                       |
+| `DELETE /api/collections/<name>/records/<id>`         | Deletes a record when the delete rule allows it; `204`                         |
+| `GET /api/realtime?collection=<name>` (WebSocket)     | Live changes to records the view rule allows, see [Realtime](#realtime)        |
+| `GET /api/files/<id>`                                 | A file from the `files` collection (public; ids are random)                    |
+| `GET /api/types?token=…`                              | TypeScript types of every collection; the URL is on the **Types** page         |
+| `<any method> /api/functions/<name>/<path>`           | Calls a [function](#functions); `401` when it requires sign-in, `404` if none  |
+| `POST /api/mail/send`                                 | Sends an [email template](#email-templates); needs an API key (`Bearer pbk_…`) |
+| `GET /api/collections`                                | Every collection with its fields, indexes, API rules and settings; see below   |
+| `GET` / `PATCH` / `DELETE /api/collections/<name>`    | One collection; `PATCH` changes the given parts, `DELETE` answers `204`        |
+| `POST /api/collections`                               | `{ name, fields?, indexes?, rules?, thumbnails? }`; `201` with the collection  |
+| `GET /api/collections/export?collections=a,b`         | An export file of the collections (all without `collections`), no records      |
+| `POST /api/collections/import`                        | Imports an export file; `?dryRun`, `?removeMissing`, `?force`                  |
+
+### Collections API, export and import
+
+The schema can be managed from code too, with an [API key](#email-templates) with the **service** scope (other keys get `403`): `/api/collections` creates, changes and deletes collections with their fields, indexes and API rules, and exports and imports them as a JSON file without records. The admin has the same export and import in the menu next to **Collections**.
+
+- A collection comes back as `{ id, name, system, settings: { rules, thumbnails }, fields, indexes }`; relation fields point at collections by id (`options.collectionId`).
+- `PATCH` only changes the parts it is given. `fields` and `indexes` are the whole list: a field with an `id`, or else with the name of an existing field, changes that field; other fields are added and fields left out are deleted. `rules` keeps the actions it leaves out.
+- An import creates the collections of the file and changes existing ones (matched by id, then by name) to match it, as a publish between environments does, but only for collections. Other collections stay unless `?removeMissing=true`. Relations to collections outside the file are found by name; `422` when the instance doesn't have them.
+- Changes that delete collections, fields or data (on `PATCH` and import) fail with `409` and the plan unless `?force=true`; `?dryRun=true` only returns the plan. A change that fails stops the rest: `422` with the number of changes made.
+- `export` and `import` are reserved names for collections.
 
 ### Records API and API rules
 
@@ -223,7 +262,29 @@ Every collection has a records API at `/api/collections/<name>/records`, guarded
 
 Filters (`?filter=` and rules) use field names, `"strings"`, numbers, `true`/`false`, `null`, `@now`, `@request.auth.<field>` (the signed-in user; `""` when signed out) and `@request.body.<field>` (submitted values), with `=`, `!=`, `>`, `>=`, `<`, `<=`, `~` (contains), `!~`, the same with `?` in front for any item of a multiple relation or list (`tags ?= "news"`), `&&`, `||` and parentheses. `?sort=-created_at,title` sorts; `-` means descending.
 
-Records come back with real values: booleans as `true`/`false`, JSON fields parsed, and multiple relations, files and lists as arrays (`[]` when empty); blob fields are left out. `?fields=id,title` returns only those fields. `users` can't be created through the API (use sign-up), and its `email` and `verified` can't be changed there; `files` can only be listed, viewed and deleted. The **Preview** tab of the same panel shows every endpoint with SDK and cURL examples for its fields.
+Records come back with real values: booleans as `true`/`false`, JSON fields parsed, and multiple relations, files and lists as arrays (`[]` when empty); blob fields are left out. `?fields=id,title` returns only those fields. `?expand=author,comments.author` (on every records call except `DELETE`) replaces relation and file fields by the records they point to, up to three levels deep: a single relation becomes a record or `null`, a multiple one an array of records. Related records are only included when the view rule of their collection allows them, and expanding fails with `400` when the API doesn't show that collection at all (its view rule is **Admins only**). An [API key](#email-templates) with the **service** scope (`Authorization: Bearer pbk_…`) uses the records API as an admin: the API rules don't apply to it, so a back-end can write what users may not; other API keys get `403` there. `users` can't be created through the API (use sign-up), and its `email` and `verified` can't be changed there; `files` can only be listed, viewed and deleted. The **Preview** tab of the same panel shows every endpoint with SDK and cURL examples for its fields.
+
+### Realtime
+
+Apps can follow changes to records as they are saved: every create, update and delete that the collection's **view rule** lets them see, over a WebSocket. With the SDK:
+
+```ts
+const subscription = pb.db.posts.subscribe(
+	(event) => console.log(event.action, event.record), // 'create' | 'update' | 'delete'
+	{ where: { status: 'published' }, select: ['id', 'title'] }
+);
+
+await subscription.ready; // rejects when the view rule doesn't allow it
+subscription.unsubscribe();
+```
+
+`pb.db.posts.subscribe(callback, { id })` follows one record. The SDK opens one connection per collection, reconnects by itself and follows sign-ins and sign-outs. The protocol, for other clients: connect to `/api/realtime?collection=<name>` and send `{"type":"auth","token":"<token>"}` (leave out `token` to connect anonymously) within 10 seconds; after `{"type":"ready"}`, send `{"type":"subscribe","id":"<your id>","record":"<record id>?","filter":"<filter>?","fields":["…"]?,"expand":["author"]?}` (`expand` as in the records API, checked against the view rules of the related collections for every event), answered by `subscribed` or `error`, and receive `{"type":"event","id","action","record","at"}`. `{"type":"ping"}` is answered by `{"type":"pong"}`; send it every 30 seconds. See `src/lib/realtime/protocol.ts` for the messages, error codes and close codes (`4401`: invalid or expired token).
+
+- An event's `record` has the same shape as the records API returns it; for a delete it is the record as it was. A record that no longer matches the view rule or the filter after an update sends no event.
+- The rule sees the signed-in user as it was when the connection was made; it is checked again on reconnect. The connection is closed when the token expires.
+- Changes made outside the app's records layer (restoring a backup) send no events.
+- The dashboard's records grid uses it too: it updates while you look at it, whoever made the change, and shows **Live** in the top bar.
+- On Workers, every collection with subscribers has a Durable Object (`RealtimeHub`, SQLite-backed, so the Free plan works too) that holds its sockets; while no events come in it hibernates, so open sockets aren't billed for duration. On Node the server holds them itself. Behind a reverse proxy, let WebSocket upgrades through (nginx needs `proxy_set_header Upgrade $http_upgrade` and `Connection "upgrade"`; Caddy does it by default).
 
 ### OAuth from your app
 
@@ -308,9 +369,21 @@ Scheduled backups run once a minute from a Cron Trigger on the Worker (`wrangler
 
 Under **System → Functions** you create serverless functions, like Supabase Edge Functions. A function is one ES module whose default export has a `fetch(request, env, ctx)` handler, the same as a Cloudflare Worker. Write it in TypeScript or JavaScript in the editor, or upload a `.js`/`.ts` file; TypeScript is compiled to JavaScript in the browser. To use npm packages, bundle them into one file first (for example `esbuild --bundle --format=esm`).
 
-Every deploy uploads the code as a Worker of its own, `<instance>-fn-<name>` (`pouchbase-fn-<name>` by default), on the same Cloudflare account, and is kept as a version that can be restored. Apps call a function on `/api/functions/<name>`; the method, headers, body and the rest of the path and query string are passed on. Pouchbase checks the bearer token of an app user and passes the user on: `pouchbaseUser(request)` returns it in the function, or `null`. A function that requires sign-in answers `401` without a valid token. Secrets are set on the Worker (Cloudflare stores them encrypted) and are in `env`, next to `env.POUCHBASE_URL`. The Logs tab reads Workers Logs through the Workers Observability API, and the Test tab sends requests to the deployed version.
+Every deploy uploads the code as a Worker of its own, `<instance>-fn-<name>` (`pouchbase-fn-<name>` by default), on the same Cloudflare account, and is kept as a version that can be restored. Apps call a function on `/api/functions/<name>`; the method, headers, body and the rest of the path and query string are passed on. Pouchbase checks the bearer token of an app user and passes the user on: `pouchbaseUser(request)` returns it in the function, or `null`. A function that requires sign-in answers `401` without a valid token. Secrets are set on the Worker (Cloudflare stores them encrypted) and are in `env`, next to `env.POUCHBASE_URL` and `env.POUCHBASE_API_KEY`, an [API key](#email-templates) of the function that is renewed on every deploy (functions deployed before it existed get one on their next deploy). The Logs tab reads Workers Logs through the Workers Observability API, and the Test tab sends requests to the deployed version.
 
 The Worker answers on its `workers.dev` URL, but only to requests that carry the function's secret, which only Pouchbase knows; the account needs a `workers.dev` subdomain (open Workers & Pages in the Cloudflare dashboard once). The Pouchbase Worker reaches the function Workers with the `global_fetch_strictly_public` compatibility flag. Responses are served from the admin's domain, so they get `Content-Security-Policy: sandbox`: HTML from a function can't run scripts there. Browsers on other sites can't post HTML forms to a function (SvelteKit's CSRF protection); JSON requests and calls from servers, such as webhooks, work.
+
+## Email templates
+
+Under **System → Mail** you make email templates: a subject, a preview text and a body with variables, in a visual editor or as a whole HTML document in a code editor. The visual editor has text (headings, sizes, colors, alignment, lists, links) and blocks from **Insert**: buttons (link, size, colors, corner radius, full width), images (width, alignment, link), sections with a background, two or three columns that stack on phones, spacers and dividers. Selecting a block shows its settings in the side panel, with buttons to move, duplicate or delete it; with nothing selected the panel sets the email's colors, font, text size, card width, padding, corners and logo. The document is stored as JSON and rendered into tables with inline styles, so it looks the same in mail clients. The **Preview** tab fills in the sample data, on a desktop or phone width, and **Send test** sends it to you. The variables:
+
+- `{{ name }}` and `{{ user.name }}`: a value, HTML-escaped; `{{ name | there }}` with a fallback for a missing or empty value.
+- `{{#if paid}} … {{else}} … {{/if}}`: shown when the value is truthy (an empty list is not).
+- `{{#each items}} … {{else}} … {{/each}}`: repeated per item, with `{{ this }}`, the item's fields, `{{ @index }}` and `{{ @number }}`. In the visual editor a block may span paragraphs, or the items of a list.
+
+A variable used outside `#if` and loops, without a fallback, is required: sending without it answers `422`. Every email also gets a plain-text version, made from the HTML.
+
+Templates are sent with `POST /api/mail/send` (`{ "template", "to", "variables" }`; `to` is one address or up to 50, each recipient gets an email of their own), or `pb.mail.send()` of the JS SDK. That needs an **API key** (`Authorization: Bearer pbk_…`), so only server-side code can send email: create keys for your back-end under **System → API keys** (only a hash is stored; the key is shown once), with the **service** scope when the back-end also manages records past the API rules; every function has its own in `env.POUCHBASE_API_KEY`. The verification and password-reset emails are built-in templates (with `{{url}}` and `{{email}}`): they can be changed and reset, but not deleted or sent through the API.
 
 ## Plugins
 

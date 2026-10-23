@@ -1,9 +1,9 @@
 import type { RequestHandler } from './$types';
 
-import { json, preflight, requestUser } from '#lib/server/api.js';
+import { json, preflight, requestAccess } from '#lib/server/api.js';
 import { readJsonObject } from '#lib/server/api-body.js';
 
-import { errorResponse, requestedFields } from './responses';
+import { errorResponse, readOptions } from './responses';
 
 const MAX_PER_PAGE = 500;
 
@@ -21,7 +21,8 @@ function positiveInteger(value: string | null, fallback: number) {
 /**
  * Lists the records of a collection that its list rule allows.
  * Query: `page` (default 1), `perPage` (default 30, at most 500), `sort` (`-created_at,title`),
- * `filter` (`status = "published" && views > 10`) and `fields` (`id,title`) → `{ page, perPage,
+ * `filter` (`status = "published" && views > 10`), `fields` (`id,title`) and `expand`
+ * (`author,comments.author`: relation fields to replace by their records) → `{ page, perPage,
  * totalItems, totalPages, items }`.
  */
 export const GET: RequestHandler = async (event) => {
@@ -36,7 +37,7 @@ export const GET: RequestHandler = async (event) => {
 		);
 	}
 
-	const caller = await requestUser(event);
+	const caller = await requestAccess(event);
 
 	if ('response' in caller) {
 		return caller.response;
@@ -49,9 +50,9 @@ export const GET: RequestHandler = async (event) => {
 			perPage,
 			sort: url.searchParams.get('sort') ?? undefined,
 			filter: url.searchParams.get('filter') ?? undefined,
-			fields: requestedFields(url)
+			...readOptions(url)
 		},
-		{ auth: caller.user }
+		caller.access
 	);
 
 	if (result.isErr()) {
@@ -63,8 +64,8 @@ export const GET: RequestHandler = async (event) => {
 
 /**
  * Creates a record when the collection's create rule allows it. Body: a JSON object with a value
- * per field → the new record (only `?fields=` when given). Fields that are left out get their
- * default value.
+ * per field → the new record (only `?fields=` when given, with the relations in `?expand=`
+ * replaced by their records). Fields that are left out get their default value.
  */
 export const POST: RequestHandler = async (event) => {
 	const { params, request, url, locals } = event;
@@ -74,7 +75,7 @@ export const POST: RequestHandler = async (event) => {
 		return json({ message: 'Send a JSON object with a value per field' }, 400);
 	}
 
-	const caller = await requestUser(event);
+	const caller = await requestAccess(event);
 
 	if ('response' in caller) {
 		return caller.response;
@@ -82,7 +83,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const result = await locals.services
 		.records()
-		.apiCreate(params.collection, body, { auth: caller.user }, requestedFields(url));
+		.apiCreate(params.collection, body, caller.access, readOptions(url));
 
 	if (result.isErr()) {
 		return errorResponse(result.error, 'Could not create the record');

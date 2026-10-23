@@ -3,6 +3,7 @@ packages:
   - .
   - packages/*
   - site
+  - test-app
 
 allowBuilds:
   esbuild: true

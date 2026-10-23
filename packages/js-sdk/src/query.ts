@@ -263,3 +263,25 @@ export function compileOrderBy(orderBy: Record<string, string | undefined> | und
 export function compileSelect(select: readonly string[] | undefined): string | undefined {
 	return select?.length ? select.map(fieldName).join(',') : undefined;
 }
+
+/** What `include` holds per relation: `true`, or the relations of its records to include too. */
+type IncludeTree = { [field: string]: true | { include?: IncludeTree } | undefined };
+
+/** An `include` object as `expand` (`author,comments.author`). */
+export function compileInclude(include: IncludeTree | undefined): string | undefined {
+	const paths = (tree: IncludeTree, prefix: string): string[] =>
+		Object.entries(tree).flatMap(([name, option]) => {
+			if (!option) {
+				return [];
+			}
+
+			const path = `${prefix}${fieldName(name)}`;
+			const nested = option === true || !option.include ? [] : paths(option.include, `${path}.`);
+
+			return nested.length ? nested : [path];
+		});
+
+	const expand = paths(include ?? {}, '');
+
+	return expand.length ? expand.join(',') : undefined;
+}

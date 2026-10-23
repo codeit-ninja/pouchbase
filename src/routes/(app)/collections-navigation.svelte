@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import * as Button from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Icon from '#lib/components/ui/icon/index.js';
 	import * as Navigation from '#lib/components/ui/navigation/index.js';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
@@ -9,6 +10,8 @@
 	import { FILES_COLLECTION } from '#lib/files/files.js';
 	import { listCollections } from './collections.remote';
 	import CreateCollectionDialog from './create-collection-dialog.svelte';
+	import ExportCollectionsDialog from './export-collections-dialog.svelte';
+	import ImportCollectionsDialog from './import-collections-dialog.svelte';
 
 	const collections = $derived(await listCollections());
 
@@ -19,14 +22,33 @@
 	<Sidebar.GroupHeader>
 		<Sidebar.GroupLabel>Collections</Sidebar.GroupLabel>
 
-		<Button.Root
-			variant="ghost"
-			size="icon"
-			aria-label="Create collection"
-			onclick={() => void dialogs.open(CreateCollectionDialog)}
-		>
-			<Icon.Root icon="lucide:plus" />
-		</Button.Root>
+		<div class="flex items-center">
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger variant="ghost" size="icon" aria-label="Collections actions">
+					<Icon.Root icon="lucide:ellipsis" />
+				</DropdownMenu.Trigger>
+
+				<DropdownMenu.Content>
+					<DropdownMenu.Item onSelect={() => void dialogs.open(ExportCollectionsDialog)}>
+						<Icon.Root icon="lucide:download" />
+						Export collections
+					</DropdownMenu.Item>
+					<DropdownMenu.Item onSelect={() => void dialogs.open(ImportCollectionsDialog)}>
+						<Icon.Root icon="lucide:upload" />
+						Import collections
+					</DropdownMenu.Item>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
+
+			<Button.Root
+				variant="ghost"
+				size="icon"
+				aria-label="Create collection"
+				onclick={() => void dialogs.open(CreateCollectionDialog)}
+			>
+				<Icon.Root icon="lucide:plus" />
+			</Button.Root>
+		</div>
 	</Sidebar.GroupHeader>
 
 	{#if collections.length}

@@ -152,10 +152,7 @@ export class MailService extends Service {
 		| ServiceError<15001, 'MAIL_NOT_CONFIGURED'>
 		| SendFailed
 	> {
-		return this.services
-			.settings()
-			.get('app_name')
-			.andThen((appName) => this.send(to, testEmail(appName ?? 'Pouchbase')));
+		return this.send(to, testEmail());
 	}
 
 	private stored(): ResultAsync<

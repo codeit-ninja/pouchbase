@@ -26,6 +26,7 @@ src/lib/server/
 ├── crypto.ts               # password hashing, tokens (throws)
 ├── hooks/                  # boot.ts, session.ts, guard.ts → sequence() in src/hooks.server.ts
 └── services/
+    ├── api-keys.service.ts # API keys for server-side code (`pbk_…`); every function has one
     ├── auth.service.ts
     ├── backups.service.ts  # backups to S3-compatible buckets, schedules and restores
     ├── base.service.ts     # ServiceError type + Service base class
@@ -33,19 +34,23 @@ src/lib/server/
     ├── services.ts         # Services registry (one method per service)
     ├── collections.service.ts
     ├── database.service.ts
+    ├── environments.service.ts # development/production: snapshots of the schema and plans between instances
     ├── fields.service.ts
     ├── files.service.ts
     ├── functions.service.ts # serverless functions: one Worker each, versions, secrets, logs
     ├── indexes.service.ts
     ├── install.service.ts
     ├── mail.service.ts     # mail settings and sending (Cloudflare Email Service or SMTP)
+    ├── mail-templates.service.ts # email templates with variables, the built-in emails, sending them
     ├── oauth-providers.service.ts
     ├── plugins.service.ts  # plugins from the plugin registry: search, install, remove
+    ├── realtime.service.ts # realtime events: sessions, subscription and view-rule checks for the hubs
     ├── records.service.ts
     ├── sessions.service.ts
     ├── settings.service.ts
     ├── storage.service.ts  # uploads: R2 by default, or the S3 bucket from the settings
     ├── types.service.ts    # TypeScript types of the collections, and the token of /api/types
+    ├── updates.service.ts  # updates of Pouchbase itself (latest release, Worker self-deploy, binary)
     └── users.service.ts
 ```
 
@@ -116,6 +121,11 @@ app**; each service owns a range:
 | 17000 | types (TypeScript types of the collections) |
 | 18000 | functions (serverless functions on their own Workers) |
 | 19000 | plugins (plugin registry, installed plugins) |
+| 20000 | environments (development and production instances, snapshots, plans) |
+| 21000 | updates (updates of Pouchbase itself: the latest release, Worker self-deploys, the binary) |
+| 22000 | realtime (record events over WebSockets; what the hubs ask through `/internal/realtime/*`) |
+| 23000 | API keys (secret keys for server-side code; one per function) |
+| 24000 | mail templates (email templates with variables, sent through `/api/mail/send`) |
 
 A new service takes the next free range (6000, 7000, ...). Never reuse a code.
 

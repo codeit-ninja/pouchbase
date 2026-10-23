@@ -3,3 +3,4 @@ export { database } from './database';
 export { functions } from './functions';
 export { storage } from './storage';
 export { insights } from './insights';
+export * as selfUpdate from './self-update';

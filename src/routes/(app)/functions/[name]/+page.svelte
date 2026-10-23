@@ -8,7 +8,6 @@
 	import * as Segmented from '#lib/components/ui/segmented/index.js';
 	import * as Spinner from '#lib/components/ui/spinner/index.js';
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
-	import { getAppName } from '#lib/remote/settings.remote.js';
 	import { getFunction } from '../functions.remote';
 	import FunctionCode from './function-code.svelte';
 	import FunctionLogs from './function-logs.svelte';
@@ -27,7 +26,7 @@
 	];
 
 	const name = $derived(page.params.name ?? '');
-	const [appName, fn] = $derived(await Promise.all([getAppName(), getFunction(name)]));
+	const fn = $derived(await getFunction(name));
 
 	// Queries can't read the request URL, so the page builds the URL apps call.
 	const endpoint = $derived(`${page.url.origin}/api/functions/${fn.name}`);
@@ -36,7 +35,7 @@
 </script>
 
 <svelte:head>
-	<title>{fn.name} · Functions · {appName}</title>
+	<title>{fn.name} · Functions · Pouchbase</title>
 </svelte:head>
 
 <Topbar.Root>

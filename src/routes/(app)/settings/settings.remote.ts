@@ -2,7 +2,7 @@ import { error, invalid } from '@sveltejs/kit';
 
 import { form, getRequestEvent, query } from '$app/server';
 
-import { getAppName } from '#lib/remote/settings.remote.js';
+import { getEnvironment } from '#lib/remote/settings.remote.js';
 import { mailSettingsSchema, testMailSchema } from '#lib/schemas/mail.js';
 import { generalSettingsSchema } from '#lib/schemas/settings.js';
 
@@ -19,13 +19,15 @@ function requireUser() {
 export const updateGeneralSettings = form(generalSettingsSchema, async (data) => {
 	const { services } = requireUser();
 
-	const result = await services.settings().set('app_name', data.appName);
+	const result = await services
+		.environments()
+		.set(data.environment === 'none' ? null : data.environment);
 
 	if (result.isErr()) {
 		error(500, result.error.message);
 	}
 
-	void getAppName().refresh();
+	void getEnvironment().refresh();
 
 	return { saved: true };
 });

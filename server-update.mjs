@@ -109,6 +109,7 @@ function replace(target, download) {
 /**
  * @param {string} currentVersion
  * @param {{ check?: boolean }} options `check` only reports whether an update is available.
+ * @returns {Promise<string | null>} The version it installed, or `null` when it installed none.
  */
 export async function update(currentVersion, { check = false } = {}) {
 	console.log(`Checking ${REPOSITORY} for a newer version`);
@@ -119,7 +120,7 @@ export async function update(currentVersion, { check = false } = {}) {
 	if (compareVersions(latestVersion, currentVersion) <= 0) {
 		console.log(`Pouchbase ${currentVersion} is up to date.`);
 
-		return;
+		return null;
 	}
 
 	if (check) {
@@ -127,7 +128,7 @@ export async function update(currentVersion, { check = false } = {}) {
 			`Pouchbase ${latestVersion} is available (this is ${currentVersion}). Run \`pouchbase update\` to install it.`
 		);
 
-		return;
+		return null;
 	}
 
 	const name = assetName();
@@ -188,4 +189,6 @@ export async function update(currentVersion, { check = false } = {}) {
 	console.log(
 		`Updated Pouchbase from ${currentVersion} to ${latestVersion}. Restart the server to run the new version.`
 	);
+
+	return latestVersion;
 }

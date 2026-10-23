@@ -1,5 +1,7 @@
 import type { FieldOptions, FieldType } from '../../fields/field-types';
+import type { PlanStep, PlanWarning } from '../../environments/diff';
 import type { CollectionSettings } from '../../files/thumbnails';
+import type { MailStyle } from '../../mail/layout';
 import type { PluginManifest } from '@pouchbasejs/plugin-sdk';
 
 import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
@@ -8,7 +10,6 @@ export const users = sqliteTable('users', {
 	id: text('id')
 		.primaryKey()
 		.$defaultFn(() => crypto.randomUUID()),
-	username: text('username').notNull().unique(),
 	email: text('email').notNull().unique(),
 	passwordHash: text('password_hash').notNull(),
 	createdAt: integer('created_at', { mode: 'timestamp_ms' })
@@ -289,6 +290,106 @@ export const plugins = sqliteTable('plugins', {
 	updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
 		.notNull()
 		.$defaultFn(() => new Date())
+});
+
+/**
+ * Tokens another instance uses to read this instance's snapshot and publish to it (see
+ * `EnvironmentsService`). Only the hash is stored; the token is shown once.
+ */
+export const deployTokens = sqliteTable('deploy_tokens', {
+	id: text('id')
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID()),
+	name: text('name').notNull(),
+	/** `hashToken` of the token. */
+	tokenHash: text('token_hash').notNull().unique(),
+	createdAt: integer('created_at', { mode: 'timestamp_ms' })
+		.notNull()
+		.$defaultFn(() => new Date()),
+	lastUsedAt: integer('last_used_at', { mode: 'timestamp_ms' })
+});
+
+/** Publishes from another instance to this one, running or done (see `EnvironmentsService`). */
+export const deployments = sqliteTable('deployments', {
+	id: text('id')
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID()),
+	tokenId: text('token_id').references(() => deployTokens.id, { onDelete: 'set null' }),
+	/** Name of the instance that published. */
+	source: text('source').notNull(),
+	status: text('status', { enum: ['running', 'completed', 'failed'] })
+		.notNull()
+		.default('running'),
+	steps: text('steps', { mode: 'json' }).$type<PlanStep[]>().notNull(),
+	warnings: text('warnings', { mode: 'json' }).$type<PlanWarning[]>().notNull(),
+	/** How many steps have run; the next step is `steps[done]`. */
+	done: integer('done').notNull().default(0),
+	/** The backup made before the first step; the steps wait until it is completed. */
+	backupId: text('backup_id').references(() => backups.id, { onDelete: 'set null' }),
+	error: text('error'),
+	/** Consecutive failed attempts of the current step. */
+	attempts: integer('attempts').notNull().default(0),
+	/** A step is running until then; keeps two requests from running the same deployment. */
+	lockedUntil: integer('locked_until', { mode: 'timestamp_ms' }),
+	startedAt: integer('started_at', { mode: 'timestamp_ms' })
+		.notNull()
+		.$defaultFn(() => new Date()),
+	finishedAt: integer('finished_at', { mode: 'timestamp_ms' })
+});
+
+/**
+ * Email templates of the Mail pages, sent by functions and back-ends through `/api/mail/send`.
+ * The built-in templates (`SYSTEM_TEMPLATES`) only get a row once they are changed.
+ */
+export const mailTemplates = sqliteTable('mail_templates', {
+	id: text('id')
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID()),
+	/** Lowercase letters, digits and dashes; how the API and the SDK name the template. */
+	name: text('name').notNull().unique(),
+	description: text('description').notNull().default(''),
+	/** With variable tags, like the body. */
+	subject: text('subject').notNull(),
+	/** Shown by mail clients next to the subject (visual editor); with variable tags. */
+	preheader: text('preheader').notNull().default(''),
+	editor: text('editor', { enum: ['visual', 'html'] }).notNull(),
+	/** The visual editor's document (JSON), or the whole HTML document; with variable tags. */
+	body: text('body').notNull(),
+	/** Colors, font and logo of the layout, for the visual editor. */
+	style: text('style', { mode: 'json' }).$type<MailStyle>().notNull(),
+	/** Example variables for the preview and test emails. */
+	sampleData: text('sample_data', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+	createdAt: integer('created_at', { mode: 'timestamp_ms' })
+		.notNull()
+		.$defaultFn(() => new Date()),
+	updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+		.notNull()
+		.$defaultFn(() => new Date())
+});
+
+/**
+ * Secret keys for server-side code (back-ends and functions) to call the parts of the API that an
+ * app user can't, such as sending email. Only the hash is stored; the key is shown once. Every
+ * deployed function has a key of its own (`functionId`), renewed on each deploy.
+ */
+export const apiKeys = sqliteTable('api_keys', {
+	id: text('id')
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID()),
+	name: text('name').notNull(),
+	/** `hashToken` of the key. */
+	keyHash: text('key_hash').notNull().unique(),
+	/** The first characters of the key, so it can be recognised in the list. */
+	prefix: text('prefix').notNull(),
+	/** `standard`: what server-side code may do, such as sending email; `service`: also the records API as an admin. */
+	scope: text('scope', { enum: ['standard', 'service'] })
+		.notNull()
+		.default('standard'),
+	functionId: text('function_id').references(() => functions.id, { onDelete: 'cascade' }),
+	createdAt: integer('created_at', { mode: 'timestamp_ms' })
+		.notNull()
+		.$defaultFn(() => new Date()),
+	lastUsedAt: integer('last_used_at', { mode: 'timestamp_ms' })
 });
 
 export type User = typeof users.$inferSelect;

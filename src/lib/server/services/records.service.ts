@@ -4,11 +4,11 @@ import type { Field } from './fields.service';
 import type { SignInMethod } from '#lib/auth/sign-in-methods.js';
 import type { FieldOptions } from '#lib/fields/field-types.js';
 import type { ApiRuleAction } from '#lib/filter/rules.js';
+import type { RealtimeAction } from '#lib/realtime/protocol.js';
 import type { SqlCondition } from '../filter';
-import type { ResultAsync } from 'neverthrow';
 
 import { asc, inArray } from 'drizzle-orm';
-import { errAsync, fromPromise, okAsync } from 'neverthrow';
+import { errAsync, fromPromise, okAsync, ResultAsync } from 'neverthrow';
 
 import { idGenerator, isAutoType, isRelationType, NOW_DEFAULT } from '#lib/fields/field-types.js';
 import { sqlDefaultSelect } from '#lib/fields/sql-expression.js';
@@ -23,6 +23,7 @@ import { generateId } from '../crypto';
 import { USERS_COLLECTION } from './auth.service';
 import { FILES_COLLECTION } from '#lib/files/files.js';
 import { parseThumbnailList, storageKeys } from './files.service';
+import { inBackground } from './realtime.service';
 import { collections, fields } from '../db';
 import { Service } from './base.service';
 
@@ -104,7 +105,15 @@ export type ApiListOptions = {
 	filter?: string;
 	/** Only return these fields; all of them when missing. */
 	fields?: string[];
+	/** Relation fields to replace by their records: `author`, `comments.author` (see `expand()`). */
+	expand?: string[];
 };
+
+/** What the records API returns of a record: `fields` limits the fields, `expand` relations. */
+export type ApiReadOptions = { fields?: string[]; expand?: string[] };
+
+/** Relation fields to expand by name, each with the fields to expand in its related records. */
+type ExpandTree = Map<string, ExpandTree>;
 
 export type ApiRecordList = {
 	page: number;
@@ -121,8 +130,15 @@ type GuardError =
 	| InvalidRecordError;
 
 type InvalidQueryError = ServiceError<8015, 'INVALID_QUERY'> & {
-	data: { param: 'filter' | 'sort' | 'fields'; message: string };
+	data: { param: 'filter' | 'sort' | 'fields' | 'expand'; message: string };
 };
+
+type ExpandError =
+	| ContextError
+	| GuardError
+	| InvalidQueryError
+	| ServiceError<6010, 'GET_COLLECTION_BY_ID_FAILED'>
+	| ServiceError<8018, 'EXPAND_RECORDS_FAILED'>;
 
 type ContextError =
 	| ServiceError<1004, 'APP_DATABASE_MISSING'>
@@ -138,6 +154,8 @@ const contexts = new Map<string, RecordContext>();
 
 /** D1 allows at most 100 bound parameters per statement (SQLite itself allows more). */
 const MAX_IDS = 90;
+/** How deep `expand` follows relations: `a.b.c`. */
+const MAX_EXPAND_DEPTH = 3;
 /** Field types whose value makes a good label for a related record, in order of preference. */
 const LABEL_TYPES = new Set(['text', 'email', 'url']);
 
@@ -357,11 +375,98 @@ function selectFields(readable: Field[], names: string[] | undefined) {
 	return readable.filter((field) => names.includes(field.name));
 }
 
+/**
+ * `?expand=author,comments.author` as a tree of field names. Throws a `FilterError` for a path
+ * that is empty or deeper than `MAX_EXPAND_DEPTH`.
+ */
+function parseExpand(paths: string[] | undefined): ExpandTree {
+	const tree: ExpandTree = new Map();
+
+	for (const path of paths ?? []) {
+		const names = path.split('.').map((name) => name.trim());
+
+		if (names.some((name) => !name)) {
+			throw new FilterError(`Invalid path \`${path}\``);
+		}
+
+		if (names.length > MAX_EXPAND_DEPTH) {
+			throw new FilterError(
+				`\`${path}\` is too deep: relations can be expanded ${MAX_EXPAND_DEPTH} levels deep`
+			);
+		}
+
+		let level = tree;
+
+		for (const name of names) {
+			let next = level.get(name);
+
+			if (!next) {
+				next = new Map();
+				level.set(name, next);
+			}
+
+			level = next;
+		}
+	}
+
+	return tree;
+}
+
+/**
+ * `paths` (or a tree of them) as a tree, checking that every field of its first level is a
+ * relation or file field of `readable`. Throws a `FilterError`.
+ */
+function expandTree(readable: Field[], paths: string[] | ExpandTree | undefined) {
+	const tree = paths instanceof Map ? paths : parseExpand(paths);
+
+	for (const name of tree.keys()) {
+		const field = readable.find((field) => field.name === name);
+
+		if (!field) {
+			throw new FilterError(`Unknown field \`${name}\``);
+		}
+
+		if (!isRelationType(field.type)) {
+			throw new FilterError(`\`${name}\` is not a relation or file field`);
+		}
+	}
+
+	return tree;
+}
+
+/** The fields to select: `names` plus the fields to expand, or all of them without `names`. */
+function withExpanded(names: string[] | undefined, tree: ExpandTree) {
+	return names?.length ? [...new Set([...names, ...tree.keys()])] : names;
+}
+
+/** The ids in a decoded relation value: one id, an array of them, or none. */
+function relatedIds(value: unknown) {
+	if (Array.isArray(value)) {
+		return value.map(String);
+	}
+
+	return value === null || value === undefined ? [] : [String(value)];
+}
+
 /** A row with the columns of `selected`, in order, as an API record. */
 function toApiRecord(selected: Field[], row: unknown[]) {
 	return Object.fromEntries(
 		selected.map((field, index) => [field.name, decodeValue(field, row[index])])
 	) as ApiRecord;
+}
+
+/** Stored values by field name as the records API returns the record, e.g. for realtime events. */
+export function apiRecord(collectionFields: Field[], values: Record<string, unknown>) {
+	const readable = apiFields(collectionFields);
+	return toApiRecord(
+		readable,
+		readable.map((field) => values[field.name])
+	);
+}
+
+/** What a write returns: the key, then the API fields, for its realtime event. */
+function returning(key: string, collectionFields: Field[]) {
+	return [`"${key}"`, ...apiFields(collectionFields).map((field) => `"${field.name}"`)].join(', ');
 }
 
 function columnExpression(field: Pick<Field, 'name' | 'type'>) {
@@ -513,16 +618,15 @@ export class RecordsService extends Service {
 
 	/**
 	 * One page of records for the records API, filtered by `options.filter` and by the collection's
-	 * list rule: records the rule doesn't match are left out.
+	 * list rule: records the rule doesn't match are left out. Without `access` (an API key with the
+	 * service scope), the rule isn't checked. `options.expand` replaces relations by their records
+	 * (see `expand()`).
 	 */
 	apiList(
 		collectionName: string,
 		options: ApiListOptions,
-		access: ApiAccess
-	): ResultAsync<
-		ApiRecordList,
-		ContextError | GuardError | InvalidQueryError | ServiceError<8000, 'LIST_RECORDS_FAILED'>
-	> {
+		access: ApiAccess | undefined
+	): ResultAsync<ApiRecordList, ExpandError | ServiceError<8000, 'LIST_RECORDS_FAILED'>> {
 		return this.context(collectionName).andThen((context) =>
 			this.guard(context, 'list', access).andThen((rule) => {
 				const { collection, fields: collectionFields, databaseId } = context;
@@ -536,16 +640,21 @@ export class RecordsService extends Service {
 
 				return this.compileQuery('filter', () =>
 					options.filter?.trim()
-						? both(rule, compileFilter(options.filter, readable, access))
+						? both(rule, compileFilter(options.filter, readable, access ?? { auth: null }))
 						: rule
 				).andThen((where) =>
 					this.compileQuery('sort', () => compileSort(options.sort ?? '', readable))
 						.andThen((sort) =>
-							this.compileQuery('fields', () => selectFields(readable, options.fields)).map(
-								(selected) => ({ sort, selected })
+							this.compileQuery('expand', () => expandTree(readable, options.expand)).map(
+								(tree) => ({ sort, tree })
 							)
 						)
-						.andThen(({ sort, selected }) => {
+						.andThen(({ sort, tree }) =>
+							this.compileQuery('fields', () =>
+								selectFields(readable, withExpanded(options.fields, tree))
+							).map((selected) => ({ sort, tree, selected }))
+						)
+						.andThen(({ sort, tree, selected }) => {
 							// Without a sort, records come in the order they were created.
 							const order = [
 								...(sort.length ? sort : [`"${created[0] ?? key}" ASC`]),
@@ -565,17 +674,21 @@ export class RecordsService extends Service {
 									}
 								]),
 								(error) => this.error(8000, 'LIST_RECORDS_FAILED', error)
-							).map(([[total], rows]) => {
-								const totalItems = Number(total?.[0] ?? 0);
+							)
+								.map(([[total], rows]) => {
+									const totalItems = Number(total?.[0] ?? 0);
 
-								return {
-									page: options.page,
-									perPage: options.perPage,
-									totalItems,
-									totalPages: Math.ceil(totalItems / options.perPage),
-									items: rows.map((row) => toApiRecord(selected, row))
-								} satisfies ApiRecordList;
-							});
+									return {
+										page: options.page,
+										perPage: options.perPage,
+										totalItems,
+										totalPages: Math.ceil(totalItems / options.perPage),
+										items: rows.map((row) => toApiRecord(selected, row))
+									} satisfies ApiRecordList;
+								})
+								.andThen((list) =>
+									this.expand(collectionFields, list.items, tree, access).map(() => list)
+								);
 						})
 				);
 			})
@@ -584,47 +697,23 @@ export class RecordsService extends Service {
 
 	/**
 	 * One record for the records API; `null` when it doesn't exist or the collection's view rule
-	 * doesn't match it. Without `access`, the rule isn't checked. `fields` limits the fields.
+	 * doesn't match it. Without `access`, the rule isn't checked. `fields` limits the fields and
+	 * `expand` replaces relations by their records (see `expand()`).
 	 */
 	apiGet(
 		collectionName: string,
 		id: string,
-		options: { access?: ApiAccess; fields?: string[] } = {}
-	): ResultAsync<
-		ApiRecord | null,
-		ContextError | GuardError | InvalidQueryError | ServiceError<8011, 'GET_RECORD_FAILED'>
-	> {
-		return this.context(collectionName).andThen((context) =>
-			this.guard(context, 'view', options.access).andThen((rule) => {
-				const { collection, fields: collectionFields, databaseId } = context;
-				const { key } = autoFields(collectionFields);
-
-				if (!collectionFields.length) {
-					return okAsync(null);
-				}
-
-				return this.compileQuery('fields', () =>
-					selectFields(apiFields(collectionFields), options.fields)
-				).andThen((selected) =>
-					fromPromise(
-						queryDatabase(
-							databaseId,
-							`SELECT ${selected.map((field) => `"${field.name}"`).join(', ')} FROM "${collection.name}" WHERE "${key}" = ? AND (${rule.sql})`,
-							[...keyParams(key, [id]), ...rule.params]
-						),
-						(error) => this.error(8011, 'GET_RECORD_FAILED', error)
-					).map(([row]) => (row ? toApiRecord(selected, row) : null))
-				);
-			})
-		);
+		options: ApiReadOptions & { access?: ApiAccess } = {}
+	): ResultAsync<ApiRecord | null, ExpandError | ServiceError<8011, 'GET_RECORD_FAILED'>> {
+		return this.readApiRecord(collectionName, id, options, options.access, options.access);
 	}
 
-	/** Creates a record through the records API (see `create`) and returns it (its `fields`). */
+	/** Creates a record through the records API (see `create`) and returns it (see `apiGet`). */
 	apiCreate(
 		collectionName: string,
 		input: RecordInput,
-		access: ApiAccess,
-		fields?: string[]
+		access: ApiAccess | undefined,
+		options: ApiReadOptions = {}
 	): ResultAsync<
 		ApiRecord,
 		| ErrorOf<ReturnType<RecordsService['create']>>
@@ -632,26 +721,26 @@ export class RecordsService extends Service {
 		| ServiceError<8003, 'RECORD_NOT_FOUND'>
 	> {
 		return this.create(collectionName, input, { access }).andThen(({ id }) =>
-			this.found(collectionName, id, fields)
+			this.found(collectionName, id, options, access)
 		);
 	}
 
 	/**
 	 * Updates the fields in `input` of a record through the records API (see `update`) and returns
-	 * the record (its `fields`).
+	 * the record (see `apiGet`).
 	 */
 	apiUpdate(
 		collectionName: string,
 		id: string,
 		input: RecordInput,
-		access: ApiAccess,
-		fields?: string[]
+		access: ApiAccess | undefined,
+		options: ApiReadOptions = {}
 	): ResultAsync<
 		ApiRecord,
 		ErrorOf<ReturnType<RecordsService['update']>> | ErrorOf<ReturnType<RecordsService['apiGet']>>
 	> {
 		return this.update(collectionName, id, input, { partial: true, access }).andThen(() =>
-			this.found(collectionName, id, fields)
+			this.found(collectionName, id, options, access)
 		);
 	}
 
@@ -808,11 +897,14 @@ export class RecordsService extends Service {
 							return fromPromise(
 								queryDatabase(
 									databaseId,
-									`INSERT INTO "${collection.name}" ${insert} RETURNING "${key}"`,
+									`INSERT INTO "${collection.name}" ${insert} RETURNING ${returning(key, collectionFields)}`,
 									entries.map(([, value]) => value)
 								),
 								(error) => this.writeError(error, 8004, 'CREATE_RECORD_FAILED')
-							).map(([[id]]) => ({ id: String(id) }));
+							).map((rows) => {
+								this.announce(collection.name, 'create', collectionFields, rows);
+								return { id: String(rows[0][0]) };
+							});
 						}
 
 						// The rule runs on the new record: a row with every field's value, which is only
@@ -824,15 +916,19 @@ export class RecordsService extends Service {
 						return fromPromise(
 							queryDatabase(
 								databaseId,
-								`INSERT INTO "${collection.name}" ${target} SELECT ${selected} FROM (SELECT ${row.map((name) => `? AS "${name}"`).join(', ')}) WHERE ${condition.sql} RETURNING "${key}"`,
+								`INSERT INTO "${collection.name}" ${target} SELECT ${selected} FROM (SELECT ${row.map((name) => `? AS "${name}"`).join(', ')}) WHERE ${condition.sql} RETURNING ${returning(key, collectionFields)}`,
 								[...row.map((name) => values[name] ?? null), ...condition.params]
 							),
 							(error) => this.writeError(error, 8004, 'CREATE_RECORD_FAILED')
-						).andThen((rows) =>
-							rows.length
-								? okAsync({ id: String(rows[0][0]) })
-								: errAsync(this.error(8017, 'RULE_DENIED'))
-						);
+						).andThen((rows) => {
+							if (!rows.length) {
+								return errAsync(this.error(8017, 'RULE_DENIED'));
+							}
+
+							this.announce(collection.name, 'create', collectionFields, rows);
+
+							return okAsync({ id: String(rows[0][0]) });
+						});
 					})
 			);
 		});
@@ -915,14 +1011,22 @@ export class RecordsService extends Service {
 								databaseId,
 								// Nothing to write (no fields left to save): only check that the record exists.
 								entries.length
-									? `UPDATE "${collection.name}" SET ${assignments} WHERE ${where} RETURNING "${key}"`
+									? `UPDATE "${collection.name}" SET ${assignments} WHERE ${where} RETURNING ${returning(key, collectionFields)}`
 									: `SELECT "${key}" FROM "${collection.name}" WHERE ${where}`,
 								[...entries.map(([, value]) => value), ...keyParams(key, [id]), ...condition.params]
 							),
 							(error) => this.writeError(error, 8005, 'UPDATE_RECORD_FAILED')
-						).andThen((rows) =>
-							rows.length ? okAsync({ id }) : errAsync(this.error(8003, 'RECORD_NOT_FOUND'))
-						);
+						).andThen((rows) => {
+							if (!rows.length) {
+								return errAsync(this.error(8003, 'RECORD_NOT_FOUND'));
+							}
+
+							if (entries.length) {
+								this.announce(collection.name, 'update', collectionFields, rows);
+							}
+
+							return okAsync({ id });
+						});
 					})
 			);
 		});
@@ -976,11 +1080,13 @@ export class RecordsService extends Service {
 						const rows = params.length
 							? await queryDatabase(
 									databaseId,
-									`DELETE FROM "${collection.name}" WHERE "${key}" IN (${params.map(() => '?').join(', ')}) AND (${condition.sql}) RETURNING "${key}"`,
+									`DELETE FROM "${collection.name}" WHERE "${key}" IN (${params.map(() => '?').join(', ')}) AND (${condition.sql}) RETURNING ${returning(key, collectionFields)}`,
 									[...params, ...condition.params]
 								)
 							: [];
 						const deleted = rows.map(([id]) => String(id));
+
+						this.announce(collection.name, 'delete', collectionFields, rows);
 						const placeholders = deleted.map(() => '?').join(', ');
 
 						// Deleted users lose their linked provider accounts too.
@@ -1123,6 +1229,71 @@ export class RecordsService extends Service {
 	}
 
 	/**
+	 * Sends the realtime events of records that another service wrote directly, such as sign-ups
+	 * and uploads. Best effort: it never fails, so callers run it with `inBackground()`.
+	 */
+	announceStored(
+		collectionName: string,
+		action: 'create' | 'update',
+		ids: string[]
+	): ResultAsync<void, never> {
+		return this.context(collectionName)
+			.andThen(({ collection, fields: collectionFields, databaseId }) => {
+				const { key } = autoFields(collectionFields);
+				const params = keyParams(key, ids);
+
+				if (!collectionFields.length || !params.length) {
+					return okAsync(undefined);
+				}
+
+				return fromPromise(
+					queryDatabase(
+						databaseId,
+						`SELECT ${returning(key, collectionFields)} FROM "${collection.name}" WHERE "${key}" IN (${params.map(() => '?').join(', ')})`,
+						params
+					),
+					(error) => this.error(8011, 'GET_RECORD_FAILED', error)
+				).map((rows) => {
+					this.announce(collection.name, action, collectionFields, rows);
+				});
+			})
+			.orElse((failure) => {
+				console.error('[realtime] could not read the changed records', failure);
+				return okAsync(undefined);
+			});
+	}
+
+	/**
+	 * Sends the realtime events of written rows (the key, then the API fields; see `returning()`)
+	 * in the background: the write never waits for them.
+	 */
+	private announce(
+		collectionName: string,
+		action: RealtimeAction,
+		collectionFields: Field[],
+		rows: unknown[][]
+	) {
+		if (!rows.length) {
+			return;
+		}
+
+		const readable = apiFields(collectionFields);
+		const at = Date.now();
+
+		inBackground(
+			this.services.realtime().publish(
+				rows.map(([id, ...values]) => ({
+					collection: collectionName,
+					action,
+					id: String(id),
+					row: Object.fromEntries(readable.map((field, index) => [field.name, values[index]])),
+					at
+				}))
+			)
+		);
+	}
+
+	/**
 	 * Values of the computed fields for a record about to be saved. A failing script becomes a
 	 * form issue on its field.
 	 */
@@ -1232,18 +1403,198 @@ export class RecordsService extends Service {
 		});
 	}
 
-	/** A record that was just written, as the API returns it. */
+	/**
+	 * Expands the relations in `expand` of `records` of a collection in place, as `?expand=` does
+	 * (see `expand()`), for realtime events. Without records it only checks `expand`: every path
+	 * must be a chain of relations to collections whose view rule `access` may use.
+	 */
+	apiExpand(
+		collectionName: string,
+		records: ApiRecord[],
+		expand: string[],
+		access: ApiAccess | undefined
+	): ResultAsync<void, ExpandError> {
+		return this.context(collectionName).andThen(({ fields: collectionFields }) =>
+			this.compileQuery('expand', () => expandTree(apiFields(collectionFields), expand)).andThen(
+				(tree) => this.expand(collectionFields, records, tree, access)
+			)
+		);
+	}
+
+	/**
+	 * A record that was just written, as the API returns it, whatever its view rule; the records it
+	 * links to only when their view rules let `access` see them.
+	 */
 	private found(
 		collectionName: string,
 		id: string,
-		fields?: string[]
+		options: ApiReadOptions,
+		access: ApiAccess | undefined
 	): ResultAsync<
 		ApiRecord,
 		ErrorOf<ReturnType<RecordsService['apiGet']>> | ServiceError<8003, 'RECORD_NOT_FOUND'>
 	> {
-		return this.apiGet(collectionName, id, { fields }).andThen((record) =>
+		return this.readApiRecord(collectionName, id, options, undefined, access).andThen((record) =>
 			record ? okAsync(record) : errAsync(this.error(8003, 'RECORD_NOT_FOUND'))
 		);
+	}
+
+	/**
+	 * One record as the records API returns it, or `null`. The view rule of the record is checked
+	 * for `viewer`, those of the records it expands for `access` (neither when `undefined`).
+	 */
+	private readApiRecord(
+		collectionName: string,
+		id: string,
+		options: ApiReadOptions,
+		viewer: ApiAccess | undefined,
+		access: ApiAccess | undefined
+	): ResultAsync<ApiRecord | null, ExpandError | ServiceError<8011, 'GET_RECORD_FAILED'>> {
+		return this.context(collectionName).andThen((context) =>
+			this.guard(context, 'view', viewer).andThen((rule) => {
+				const { collection, fields: collectionFields, databaseId } = context;
+				const readable = apiFields(collectionFields);
+				const { key } = autoFields(collectionFields);
+
+				if (!collectionFields.length) {
+					return okAsync(null);
+				}
+
+				return this.compileQuery('expand', () => expandTree(readable, options.expand)).andThen(
+					(tree) =>
+						this.compileQuery('fields', () =>
+							selectFields(readable, withExpanded(options.fields, tree))
+						).andThen((selected) =>
+							fromPromise(
+								queryDatabase(
+									databaseId,
+									`SELECT ${selected.map((field) => `"${field.name}"`).join(', ')} FROM "${collection.name}" WHERE "${key}" = ? AND (${rule.sql})`,
+									[...keyParams(key, [id]), ...rule.params]
+								),
+								(error) => this.error(8011, 'GET_RECORD_FAILED', error)
+							).andThen(([row]) => {
+								if (!row) {
+									return okAsync(null);
+								}
+
+								const record = toApiRecord(selected, row);
+
+								return this.expand(collectionFields, [record], tree, access).map(() => record);
+							})
+						)
+				);
+			})
+		);
+	}
+
+	/**
+	 * Replaces the relation fields in `tree` of `records` (of a collection with `collectionFields`)
+	 * by the records they point to, as the API returns them, and expands those in turn. A single
+	 * relation becomes a record or `null`, a multiple one an array of records. With `access`, only
+	 * related records that the view rule of their collection matches are included; fails when the
+	 * API doesn't show records of that collection at all.
+	 */
+	private expand(
+		collectionFields: Field[],
+		records: ApiRecord[],
+		tree: ExpandTree,
+		access: ApiAccess | undefined
+	): ResultAsync<void, ExpandError> {
+		// Without records, every level is still checked.
+		if (!tree.size) {
+			return okAsync(undefined);
+		}
+
+		return ResultAsync.combine(
+			[...tree].map(([name, subtree]) => {
+				const field = collectionFields.find((field) => field.name === name)!;
+
+				return this.services
+					.collections()
+					.getById(field.options.collectionId ?? '')
+					.andThen((target) =>
+						target
+							? this.context(target.name).andThen((context) =>
+									this.related(context, records, name, subtree, access)
+								)
+							: okAsync(new Map<string, ApiRecord>())
+					)
+					.map((related) => {
+						for (const record of records) {
+							const found = relatedIds(record[name]).flatMap((id) => related.get(id) ?? []);
+
+							record[name] = isMultiple(field) ? found : (found[0] ?? null);
+						}
+					});
+			})
+		).map(() => undefined);
+	}
+
+	/**
+	 * The records of `context` that field `name` of `records` points to, by id and expanded by
+	 * `subtree`: only those its view rule lets `access` see.
+	 */
+	private related(
+		context: RecordContext,
+		records: ApiRecord[],
+		name: string,
+		subtree: ExpandTree,
+		access: ApiAccess | undefined
+	): ResultAsync<Map<string, ApiRecord>, ExpandError> {
+		const { collection, fields: collectionFields, databaseId } = context;
+		const readable = apiFields(collectionFields);
+		const { id: idColumn } = autoFields(collectionFields);
+		const ids = [...new Set(records.flatMap((record) => relatedIds(record[name])))];
+
+		return this.guard(context, 'view', access)
+			.mapErr((error): ExpandError =>
+				error.code === 8013 || error.code === 8014
+					? {
+							...this.error(8015, 'INVALID_QUERY'),
+							data: {
+								param: 'expand',
+								message: `the API doesn't show records of \`${collection.name}\`, so \`${name}\` can't be expanded`
+							}
+						}
+					: error
+			)
+			.andThen((rule) =>
+				this.compileQuery('expand', () => expandTree(readable, subtree)).map(() => rule)
+			)
+			.andThen((rule) => {
+				if (!idColumn || !ids.length) {
+					return this.expand(collectionFields, [], subtree, access).map(
+						() => new Map<string, ApiRecord>()
+					);
+				}
+
+				// Every statement binds the rule's parameters as well as the ids.
+				const size = Math.max(MAX_IDS - rule.params.length, 1);
+				const chunks: string[][] = [];
+
+				for (let start = 0; start < ids.length; start += size) {
+					chunks.push(ids.slice(start, start + size));
+				}
+
+				const columns = readable.map((field) => `"${field.name}"`).join(', ');
+
+				return fromPromise(
+					batchDatabase(
+						databaseId,
+						chunks.map((chunk) => ({
+							sql: `SELECT ${columns} FROM "${collection.name}" WHERE "${idColumn}" IN (${chunk.map(() => '?').join(', ')}) AND (${rule.sql})`,
+							params: [...chunk, ...rule.params]
+						}))
+					),
+					(error) => this.error(8018, 'EXPAND_RECORDS_FAILED', error)
+				).andThen((results) => {
+					const found = results.flat().map((row) => toApiRecord(readable, row));
+
+					return this.expand(collectionFields, found, subtree, access).map(
+						() => new Map(found.map((record) => [String(record[idColumn]), record]))
+					);
+				});
+			});
 	}
 
 	/**
@@ -1299,7 +1650,7 @@ export class RecordsService extends Service {
 
 	/** Runs `compile` for a query parameter; a `FilterError` becomes an `INVALID_QUERY`. */
 	private compileQuery<T>(
-		param: 'filter' | 'sort' | 'fields',
+		param: 'filter' | 'sort' | 'fields' | 'expand',
 		compile: () => T
 	): ResultAsync<T, InvalidQueryError> {
 		try {

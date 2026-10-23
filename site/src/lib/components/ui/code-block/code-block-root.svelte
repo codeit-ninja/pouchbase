@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
+	import * as ScrollArea from '../scroll-area/index.js';
 
 	type Props = HTMLAttributes<HTMLDivElement> & {
 		/** Shown in the window bar, e.g. the file name or `Terminal`. */
@@ -28,7 +29,11 @@
 	{/if}
 
 	<!-- Not a `<pre>`: each `Line` is its own block, so formatting whitespace never shows up. -->
-	<div class="overflow-x-auto p-5 font-mono leading-7 whitespace-nowrap">
-		<code class="block">{@render children?.()}</code>
-	</div>
+	<ScrollArea.Root
+		orientation="horizontal"
+		variant="dark"
+		viewportClass="p-5 font-mono leading-7 whitespace-nowrap"
+	>
+		<code class="block w-max min-w-full">{@render children?.()}</code>
+	</ScrollArea.Root>
 </div>
