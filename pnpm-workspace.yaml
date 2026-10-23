@@ -1,4 +1,6 @@
 packages:
+  # The app itself; without it Changesets doesn't see the `pouchbase` package.
+  - .
   - packages/*
   - site
 
