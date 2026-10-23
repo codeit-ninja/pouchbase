@@ -1,3 +1,5 @@
+import { POUCHBASE_INSTANCE } from '$app/env/private';
+
 import { USER_HEADER } from '#lib/functions/functions.js';
 
 /**
@@ -61,9 +63,9 @@ export default {
 };
 `;
 
-/** The Worker of a function. */
+/** The Worker of a function, prefixed with the instance so instances on one account don't clash. */
 export function scriptName(functionName: string) {
-	return `pouchbase-fn-${functionName}`;
+	return `${POUCHBASE_INSTANCE}-fn-${functionName}`;
 }
 
 /** JSON in a header: characters outside ASCII are escaped, so the header stays valid. */

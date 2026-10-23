@@ -13,6 +13,7 @@
 		{ id: 'cloudflare-workers', title: 'Cloudflare Workers' },
 		{ id: 'docker', title: 'Docker' },
 		{ id: 'single-binary', title: 'Single binary' },
+		{ id: 'several-instances', title: 'Several instances' },
 		{ id: 'finish-the-installation', title: 'Finish the installation' }
 	];
 
@@ -37,6 +38,12 @@
 			name: 'BODY_SIZE_LIMIT',
 			fallback: '16M',
 			description: 'Largest accepted request body (uploads are limited to 10 MB by the app)'
+		},
+		{
+			name: 'POUCHBASE_INSTANCE',
+			fallback: 'pouchbase',
+			description:
+				'Name of the instance on the Cloudflare account; give every instance on one account its own name'
 		},
 		{
 			name: 'POUCHBASE_LOG_TIMING',
@@ -256,8 +263,9 @@
 		The binary reads <Code.Root>.env</Code.Root> from the working directory (or the file passed with
 		<Code.Root>--env-file</Code.Root>), so put <Code.Root>CLOUDFLARE_ACCOUNT_ID</Code.Root> and
 		<Code.Root>CLOUDFLARE_API_TOKEN</Code.Root> there or in the environment.
-		<Code.Root>--http</Code.Root>, <Code.Root>--port</Code.Root> and <Code.Root>--origin</Code.Root> override
-		<Code.Root>HOST</Code.Root>, <Code.Root>PORT</Code.Root> and <Code.Root>ORIGIN</Code.Root>; the
+		<Code.Root>--http</Code.Root>, <Code.Root>--port</Code.Root>, <Code.Root>--origin</Code.Root> and
+		<Code.Root>--instance</Code.Root> override <Code.Root>HOST</Code.Root>, <Code.Root>PORT</Code.Root>,
+		<Code.Root>ORIGIN</Code.Root> and <Code.Root>POUCHBASE_INSTANCE</Code.Root>; the
 		other variables from the <a href="#docker-run">table above</a> apply as well. Run
 		<Code.Root>pouchbase --help</Code.Root> for all flags.
 	</p>
@@ -266,6 +274,28 @@
 		On Linux the binary needs <Code.Root>libatomic1</Code.Root>, which most distributions install by
 		default. On minimal images such as <Code.Root>debian:slim</Code.Root>, install it with
 		<Code.Root>apt-get install libatomic1</Code.Root>.
+	</p>
+
+	<h2 id="several-instances">Several instances on one account</h2>
+
+	<p>
+		An instance finds its data through its system database, which is named after the instance:
+		<Code.Root>POUCHBASE_INSTANCE</Code.Root>, <Code.Root>pouchbase</Code.Root> by default. Two
+		instances with the same name and the same Cloudflare credentials are the same installation, with
+		the same users and data, whether they run as a Worker, in Docker or as a binary. To host several
+		separate instances on one account, give each one its own name: lowercase letters, digits and
+		dashes, at most 19 characters.
+	</p>
+
+	<CodeBlock.Root title="Terminal">
+		<CodeBlock.Line>./pouchbase-linux-x64 serve --port=3001 --instance=shop</CodeBlock.Line>
+		<CodeBlock.Line>./pouchbase-linux-x64 serve --port=3002 --instance=blog</CodeBlock.Line>
+	</CodeBlock.Root>
+
+	<p>
+		On Workers the instance name is also the name of the Worker, so deploy every instance under its
+		own name with the same value:
+		<Code.Root>pnpm wrangler deploy --name shop --var POUCHBASE_INSTANCE:shop --secrets-file .env</Code.Root>.
 	</p>
 
 	<h2 id="finish-the-installation">Finish the installation</h2>

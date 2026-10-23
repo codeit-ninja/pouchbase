@@ -1,18 +1,19 @@
 import type { QueryResult, Statement } from '../platform';
 
-import { POUCHBASE_LOG_TIMING } from '$app/env/private';
+import { POUCHBASE_INSTANCE, POUCHBASE_LOG_TIMING } from '$app/env/private';
 
 import { database } from '../platform';
 
 /**
  * Raw queries on the platform's databases (see `../platform`).
  *
- * - `pouchbase`: the system database (users, sessions, settings), queried via `rawQuery`.
+ * - the system database (users, sessions, settings), named after the instance (`POUCHBASE_INSTANCE`,
+ *   default `pouchbase`) so several instances can share an account; queried via `rawQuery`.
  * - the app database: holds the data of the app built on Pouchbase.
  *   It gets a random name; its id and name are stored in the system database's settings.
  */
 
-export const DATABASE_NAME = 'pouchbase';
+export const DATABASE_NAME = POUCHBASE_INSTANCE;
 
 /** The database does not exist (yet), so the installation has not run. */
 export class DatabaseMissingError extends Error {

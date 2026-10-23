@@ -11,7 +11,7 @@ import type {
 } from '#lib/cloudflare/types.js';
 import type { DatabaseInfo, InsightsDriver, InsightsInput } from '../types';
 
-import { CLOUDFLARE_ACCOUNT_ID } from '$app/env/private';
+import { CLOUDFLARE_ACCOUNT_ID, POUCHBASE_INSTANCE } from '$app/env/private';
 
 import { r2OperationClass } from '#lib/cloudflare/limits.js';
 
@@ -25,8 +25,11 @@ import { graphql } from './graphql';
  * few minutes anyway, and the dashboard fires several of these calls per visit.
  */
 
-/** The Worker's name, as deployed by `wrangler.jsonc`. */
-export const WORKER_NAME = 'pouchbase';
+/**
+ * The Worker's name: the instance name, so a Worker deployed under another name (`wrangler deploy
+ * --name`) sets `POUCHBASE_INSTANCE` to the same value.
+ */
+export const WORKER_NAME = POUCHBASE_INSTANCE;
 
 const CACHE_TTL = 60_000;
 

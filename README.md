@@ -88,14 +88,15 @@ docker run -d --name pouchbase -p 3000:3000 \
   ghcr.io/pouchbase/pouchbase:latest
 ```
 
-| Variable                | Default | Description                                                             |
-| ----------------------- | ------- | ----------------------------------------------------------------------- |
-| `CLOUDFLARE_ACCOUNT_ID` | –       | Cloudflare account that holds the D1 databases and the R2 bucket        |
-| `CLOUDFLARE_API_TOKEN`  | –       | API token with the permissions listed above                             |
-| `ORIGIN`                | –       | Public URL of the instance, used for redirects and OAuth callbacks      |
-| `PORT`                  | `3000`  | Port the server listens on                                              |
-| `BODY_SIZE_LIMIT`       | `16M`   | Largest accepted request body (uploads are limited to 10 MB by the app) |
-| `POUCHBASE_LOG_TIMING`  | `false` | `true` logs the duration of every request and database round-trip       |
+| Variable                | Default     | Description                                                                                                                |
+| ----------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID` | –           | Cloudflare account that holds the D1 databases and the R2 bucket                                                           |
+| `CLOUDFLARE_API_TOKEN`  | –           | API token with the permissions listed above                                                                                |
+| `ORIGIN`                | –           | Public URL of the instance, used for redirects and OAuth callbacks                                                         |
+| `PORT`                  | `3000`      | Port the server listens on                                                                                                 |
+| `BODY_SIZE_LIMIT`       | `16M`       | Largest accepted request body (uploads are limited to 10 MB by the app)                                                    |
+| `POUCHBASE_INSTANCE`    | `pouchbase` | Name of the instance on the Cloudflare account (see [Several instances on one account](#several-instances-on-one-account)) |
+| `POUCHBASE_LOG_TIMING`  | `false`     | `true` logs the duration of every request and database round-trip                                                          |
 
 The image answers a health check at `/api/health`. The same build runs without Docker on Node 26 or later: `pnpm install`, `pnpm build:node`, then `node server.mjs` with the variables above. Behind a reverse proxy that sends `x-forwarded-proto` and `x-forwarded-host`, `ORIGIN` can be left out.
 
@@ -108,9 +109,20 @@ chmod +x pouchbase-linux-x64
 ./pouchbase-linux-x64 serve --http=0.0.0.0:8090 --origin=https://pouchbase.example.com
 ```
 
-The binary reads `.env` from the working directory (or the file passed with `--env-file`), so put `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` there or in the environment. `--http`, `--port` and `--origin` override `HOST`, `PORT` and `ORIGIN` (`--port=3001` changes only the port); the other variables from the table above apply as well. Run `pouchbase --help` for all flags. On Linux the binary needs `libatomic1`, which most distributions install by default (on minimal images such as `debian:slim`, install it with `apt-get install libatomic1`).
+The binary reads `.env` from the working directory (or the file passed with `--env-file`), so put `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` there or in the environment. `--http`, `--port`, `--origin` and `--instance` override `HOST`, `PORT`, `ORIGIN` and `POUCHBASE_INSTANCE` (`--port=3001` changes only the port); the other variables from the table above apply as well. Run `pouchbase --help` for all flags. On Linux the binary needs `libatomic1`, which most distributions install by default (on minimal images such as `debian:slim`, install it with `apt-get install libatomic1`).
 
 To build a binary for your own platform, run `pnpm build:binary` with Node 26; it is written to `dist/`.
+
+### Several instances on one account
+
+Every instance finds its data through its system database, which is named after the instance (`POUCHBASE_INSTANCE`, default `pouchbase`); the app database and the R2 bucket are recorded in it. Two instances with the same name and the same Cloudflare credentials are therefore the same installation, with the same users and data, whether they run as a Worker, in Docker or as a binary. To host several separate instances on one Cloudflare account, give each one its own name: lowercase letters, digits and dashes, at most 19 characters. The name is also the prefix of its function Workers (`<instance>-fn-<name>`).
+
+```bash
+./pouchbase-linux-x64 serve --port=3001 --instance=shop
+./pouchbase-linux-x64 serve --port=3002 --instance=blog
+```
+
+On Workers the instance name is the Worker's name as well, so deploy each instance under its own name and pass the same value: `pnpm wrangler deploy --name shop --var POUCHBASE_INSTANCE:shop --secrets-file .env`.
 
 ## Development
 
@@ -144,7 +156,7 @@ Pouchbase is built with SvelteKit (Svelte 5, TypeScript), bits-ui and Drizzle OR
 On first launch the app redirects to `/install`, a two-step wizard:
 
 1. **Account**: creates two D1 databases through the Cloudflare API and then the admin account. You are logged in right away.
-   - `pouchbase`, the **system database** (users, sessions, settings). Its migrations come from `./drizzle`.
+   - the **system database** (users, sessions, settings), named after the instance: `pouchbase` unless `POUCHBASE_INSTANCE` says otherwise. Its migrations come from `./drizzle`.
    - the **app database**, with a random name like `pb-k3x9q0w2m7a1`. It holds the data of the app you build on Pouchbase. Its id and name are stored in the system database's `settings` (`app_database_id`, `app_database_name`).
 2. **App settings**: choose the app name. This completes the installation.
 
@@ -294,7 +306,7 @@ Scheduled backups run once a minute from a Cron Trigger on the Worker (`wrangler
 
 Under **System → Functions** you create serverless functions, like Supabase Edge Functions. A function is one ES module whose default export has a `fetch(request, env, ctx)` handler, the same as a Cloudflare Worker. Write it in TypeScript or JavaScript in the editor, or upload a `.js`/`.ts` file; TypeScript is compiled to JavaScript in the browser. To use npm packages, bundle them into one file first (for example `esbuild --bundle --format=esm`).
 
-Every deploy uploads the code as a Worker of its own, `pouchbase-fn-<name>`, on the same Cloudflare account, and is kept as a version that can be restored. Apps call a function on `/api/functions/<name>`; the method, headers, body and the rest of the path and query string are passed on. Pouchbase checks the bearer token of an app user and passes the user on: `pouchbaseUser(request)` returns it in the function, or `null`. A function that requires sign-in answers `401` without a valid token. Secrets are set on the Worker (Cloudflare stores them encrypted) and are in `env`, next to `env.POUCHBASE_URL`. The Logs tab reads Workers Logs through the Workers Observability API, and the Test tab sends requests to the deployed version.
+Every deploy uploads the code as a Worker of its own, `<instance>-fn-<name>` (`pouchbase-fn-<name>` by default), on the same Cloudflare account, and is kept as a version that can be restored. Apps call a function on `/api/functions/<name>`; the method, headers, body and the rest of the path and query string are passed on. Pouchbase checks the bearer token of an app user and passes the user on: `pouchbaseUser(request)` returns it in the function, or `null`. A function that requires sign-in answers `401` without a valid token. Secrets are set on the Worker (Cloudflare stores them encrypted) and are in `env`, next to `env.POUCHBASE_URL`. The Logs tab reads Workers Logs through the Workers Observability API, and the Test tab sends requests to the deployed version.
 
 The Worker answers on its `workers.dev` URL, but only to requests that carry the function's secret, which only Pouchbase knows; the account needs a `workers.dev` subdomain (open Workers & Pages in the Cloudflare dashboard once). The Pouchbase Worker reaches the function Workers with the `global_fetch_strictly_public` compatibility flag. Responses are served from the admin's domain, so they get `Content-Security-Policy: sandbox`: HTML from a function can't run scripts there. Browsers on other sites can't post HTML forms to a function (SvelteKit's CSRF protection); JSON requests and calls from servers, such as webhooks, work.
 

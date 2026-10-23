@@ -25,7 +25,7 @@ import { Service } from './base.service';
 
 /**
  * Serverless functions: code written or uploaded on the Functions page that runs as a Worker of
- * its own (`pouchbase-fn-<name>`) on the Cloudflare account. Every deploy is kept as a version;
+ * its own (`<instance>-fn-<name>`) on the Cloudflare account. Every deploy is kept as a version;
  * secrets live only on the Worker. Apps call a function through `/api/functions/<name>`, which
  * forwards the request to the Worker (see `../functions.ts`).
  */

@@ -11,7 +11,10 @@ export type FunctionLanguage = (typeof FUNCTION_LANGUAGES)[number];
 /** Lowercase letters, digits and dashes, not at the ends: part of a URL and a Worker's name. */
 export const FUNCTION_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
-/** The Worker's name is `pouchbase-fn-<name>`, and a workers.dev label has at most 63 characters. */
+/**
+ * The Worker's name is `<instance>-fn-<name>` (an instance name has at most 19 characters), and a
+ * workers.dev label has at most 63 characters.
+ */
 export const FUNCTION_NAME_MAX_LENGTH = 40;
 
 /** Upper-case letters, digits and underscores, starting with a letter or underscore. */

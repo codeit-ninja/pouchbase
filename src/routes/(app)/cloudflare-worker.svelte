@@ -32,9 +32,12 @@
 	<Callout.Root variant="info">
 		<Callout.Icon><Icon.Root icon="lucide:server" /></Callout.Icon>
 		<Callout.Body>
-			<Callout.Title>No Worker named "pouchbase" is deployed on this account</Callout.Title>
+			<Callout.Title>The Worker of this instance is not deployed on this account</Callout.Title>
 			<Callout.Description>
-				Its bindings show up here once it is deployed with
+				Its bindings show up here once a Worker named after the instance (<span class="font-mono"
+					>POUCHBASE_INSTANCE</span
+				>, default
+				<span class="font-mono">pouchbase</span>) is deployed with
 				<span class="font-mono">pnpm wrangler deploy</span>.
 			</Callout.Description>
 		</Callout.Body>

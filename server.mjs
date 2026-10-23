@@ -16,7 +16,7 @@
  *
  * Variables: ORIGIN, HOST (default 0.0.0.0), PORT (default 3000), SHUTDOWN_TIMEOUT (seconds,
  * default 30), plus the ones the handler reads itself (BODY_SIZE_LIMIT, ADDRESS_HEADER, ...) and the
- * app's own (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, ...).
+ * app's own (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, POUCHBASE_INSTANCE, ...).
  */
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -36,6 +36,8 @@ Flags for serve:
   --http <host:port>   Address to listen on (default 0.0.0.0:3000, or HOST and PORT)
   --port <port>        Port to listen on, keeping the host (default 3000, or PORT)
   --origin <url>       Public URL of this instance, used for redirects and OAuth callbacks (ORIGIN)
+  --instance <name>    Name of this instance on the Cloudflare account (default pouchbase, or
+                       POUCHBASE_INSTANCE); instances with different names keep separate data
   --env-file <path>    Read environment variables from this file (default .env, if it exists)
   -h, --help           Show this help
 
@@ -48,6 +50,7 @@ const { values: flags, positionals } = parseArgs({
 		http: { type: 'string' },
 		port: { type: 'string' },
 		origin: { type: 'string' },
+		instance: { type: 'string' },
 		'env-file': { type: 'string' },
 		help: { type: 'boolean', short: 'h' },
 		version: { type: 'boolean', short: 'v' }
@@ -95,6 +98,10 @@ if (flags.port) {
 
 if (flags.origin) {
 	process.env.ORIGIN = flags.origin;
+}
+
+if (flags.instance) {
+	process.env.POUCHBASE_INSTANCE = flags.instance;
 }
 
 const origin = process.env.ORIGIN ? new URL(process.env.ORIGIN) : null;
