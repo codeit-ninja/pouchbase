@@ -1,5 +1,11 @@
 # @pouchbasejs/js-sdk
 
+## 0.2.0
+
+### Minor Changes
+
+- [`bd0104a`](https://github.com/pouchbase/pouchbase/commit/bd0104afe288707cde47b6289b7a0f6723d3fab5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add `pb.collection(name)` with `getList()`, `getFullList()`, `getFirstListItem()`, `getOne()`, `create()`, `update()` and `delete()` for the new records API, typed with the generated `Collections`, and `pb.filter()` to build filters with escaped values.
+
 ## 0.1.0
 
 ### Minor Changes

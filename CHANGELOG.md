@@ -1,5 +1,11 @@
 # pouchbase
 
+## 0.2.0
+
+### Minor Changes
+
+- [`bd0104a`](https://github.com/pouchbase/pouchbase/commit/bd0104afe288707cde47b6289b7a0f6723d3fab5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add a **records API** (`/api/collections/<name>/records`) to list, filter, sort, view, create, update and delete records, guarded by PocketBase-style **API rules** per collection. The new **API** panel of a collection sets who may use each action (admins only by default, everyone, signed-in users, the owner, or a custom filter such as `author = @request.auth.id`, written with autocomplete and live error checking), and previews every endpoint with its parameters, example responses and JavaScript SDK and cURL examples.
+
 ## 0.1.2
 
 ### Patch Changes
