@@ -1,5 +1,23 @@
 # pouchbase
 
+## 0.8.0
+
+### Minor Changes
+
+- [`2fd04f3`](https://github.com/pouchbase/pouchbase/commit/2fd04f3ca1e1548d79e3f4a597ee4c114b2f4af1) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Improve the email editor: pick images from files or upload them to files, resize columns freely by dragging the border between them or with a column's width setting, set the space above and below every block, and drag blocks by their handle to move them, also into columns and sections.
+
+- [`3096c45`](https://github.com/pouchbase/pouchbase/commit/3096c457493558e9cd2df9fdad8f4d92b4e1e35e) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Installing a plugin with server code deploys it to its own Worker on your Cloudflare account, with network access limited to its `permissions.network`, and registers the sign-in providers it adds. Sign-in providers are plugins: Google, GitHub, Microsoft, Discord and Twitch are built in and keep their settings, and more can be installed from the Plugins page. The Authentication page and `GET /api/auth/providers` show each provider's name and logo (`label`, `iconUrl`). Plugins whose server code imports other modules, such as `cloudflare:sockets`, are refused on install.
+
+- [`3096c45`](https://github.com/pouchbase/pouchbase/commit/3096c457493558e9cd2df9fdad8f4d92b4e1e35e) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Filter plugins by category on the Plugins page, and see each plugin's categories.
+
+- [`beca993`](https://github.com/pouchbase/pouchbase/commit/beca9932da720984cd97cbe52ade9b0ee323c65c) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Relation fields can have a default value: a record that new records link to when they don't set the field
+
+- [`beca993`](https://github.com/pouchbase/pouchbase/commit/beca9932da720984cd97cbe52ade9b0ee323c65c) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Relation fields choose what happens when a linked record is deleted: unlink it (the default), cascade the delete, or restrict it
+
+### Patch Changes
+
+- [`ed8671d`](https://github.com/pouchbase/pouchbase/commit/ed8671deb5fe61166e5d4bd292f0364aa751a4ab) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Update now on a Worker installs the latest release, also when the last update check named an older one
+
 ## 0.7.0
 
 ### Minor Changes

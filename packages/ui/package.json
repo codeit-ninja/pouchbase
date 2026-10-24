@@ -1,6 +1,6 @@
 {
 	"name": "@pouchbasejs/ui",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "Svelte 5 UI components of the Pouchbase dashboard, for the app and for plugins",
 	"license": "MIT",
 	"type": "module",

@@ -1,5 +1,20 @@
 # pouchbase-site
 
+## 0.5.0
+
+### Minor Changes
+
+- [`3096c45`](https://github.com/pouchbase/pouchbase/commit/3096c457493558e9cd2df9fdad8f4d92b4e1e35e) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Browse plugins on pouchbase.io and filter them by category. The plugin manifest's JSON Schema is served at `/schemas/plugin-manifest.json`, and the plugin docs cover the server helpers for sign-in providers, the `init` templates, `add`, dev versions, provider icons and the `@pouchbasejs/ui` components plugins can use. They also explain where plugin server code runs and how `permissions.network` wildcards match, and the authentication docs cover sign-in providers from plugins and their logos.
+
+### Patch Changes
+
+- [`beca993`](https://github.com/pouchbase/pouchbase/commit/beca9932da720984cd97cbe52ade9b0ee323c65c) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Document what deleting a linked record does to relation fields
+
+- [`5ec4111`](https://github.com/pouchbase/pouchbase/commit/5ec411154866d1b0fdf5dbef6d7a89b30f284d49) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Only let accounts in once their email address is verified, and say after sign-up that the verification email was sent
+- Updated dependencies [[`3096c45`](https://github.com/pouchbase/pouchbase/commit/3096c457493558e9cd2df9fdad8f4d92b4e1e35e), [`beca993`](https://github.com/pouchbase/pouchbase/commit/beca9932da720984cd97cbe52ade9b0ee323c65c), [`3096c45`](https://github.com/pouchbase/pouchbase/commit/3096c457493558e9cd2df9fdad8f4d92b4e1e35e)]:
+  - @pouchbasejs/plugin-sdk@0.2.0
+  - @pouchbasejs/js-sdk@0.6.0
+
 ## 0.4.0
 
 ### Minor Changes
