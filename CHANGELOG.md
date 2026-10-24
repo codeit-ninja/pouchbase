@@ -1,5 +1,21 @@
 # pouchbase
 
+## 0.7.0
+
+### Minor Changes
+
+- [`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - App users sign in with their email instead of a username: the `username` field is removed from `users`, sign-up takes `{ name, email, password }`, and the email & password provider can require a verified email before users can sign in.
+
+### Patch Changes
+
+- [`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - The environment of the instance (development or production) is set on the Environments page; the Settings page is gone.
+
+- [`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - The mail settings (provider, sender and SMTP server) and the test email moved from Settings to the Mail page.
+
+- [`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - The public plugin registry is now at `https://api.pouchbase.io`: the Plugins page and `pouchbase-plugin publish` use it unless `PLUGIN_REGISTRY_URL` or `--registry` says otherwise.
+
+- [`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Functions, Mail and Plugins now sit under Dashboard in the sidebar instead of in the System group.
+
 ## 0.6.0
 
 ### Minor Changes

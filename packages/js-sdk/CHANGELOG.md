@@ -1,5 +1,11 @@
 # @pouchbasejs/js-sdk
 
+## 0.5.0
+
+### Minor Changes
+
+- [`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - `pb.auth.signUp()` takes `{ name, email, password }` and returns `verificationRequired` (with `token: null`) when the instance requires a verified email, `pb.auth.signIn()` takes an email, and errors carry the API's `code`, such as `email_not_verified`.
+
 ## 0.4.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @pouchbasejs/plugin-sdk
 
+## 0.1.1
+
+### Patch Changes
+
+- [`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - The public plugin registry is now at `https://api.pouchbase.io`: the Plugins page and `pouchbase-plugin publish` use it unless `PLUGIN_REGISTRY_URL` or `--registry` says otherwise.
+
 ## 0.1.0
 
 ### Minor Changes
