@@ -39,7 +39,7 @@ const { items } = await pb.db.posts.findMany({ where: { status: 'published' } })
 | Method                                      | Request                                 |
 | ------------------------------------------- | --------------------------------------- |
 | `pb.auth.providers()`                       | `GET /api/auth/providers`               |
-| `pb.auth.signUp({ name, email, password })`  | `POST /api/auth/password/sign-up`       |
+| `pb.auth.signUp({ name, email, password })` | `POST /api/auth/password/sign-up`       |
 | `pb.auth.signIn(email, password)`           | `POST /api/auth/password/sign-in`       |
 | `pb.auth.signInWithOAuth(provider)`         | OAuth popup with PKCE, then polls       |
 | `pb.auth.me()`                              | `GET /api/auth/me`                      |

@@ -207,10 +207,11 @@
 		public id, such as <Code.Root>gitlab</Code.Root>, used as is in the sign-in URLs and the API.
 		Pouchbase refuses to install a plugin whose provider id another plugin already contributes,
 		including the built-in plugins for Google, GitHub, Microsoft, Discord and Twitch. The ids
-		<Code.Root>password</Code.Root>, <Code.Root>email</Code.Root> and <Code.Root>otp</Code.Root> are
-		reserved for Pouchbase's own sign-in methods. Pouchbase reads the provider's URLs, scopes and PKCE
-		setting once, when the plugin is installed. Its
-		optional <Code.Root>icon</Code.Root> is an SVG in <Code.Root>ui/</Code.Root>, such as
+		<Code.Root>password</Code.Root>, <Code.Root>email</Code.Root> and <Code.Root>otp</Code.Root> are reserved
+		for Pouchbase's own sign-in methods. Pouchbase reads the provider's URLs, scopes and PKCE setting
+		once, when the plugin is installed. Its optional <Code.Root>icon</Code.Root> is an SVG in <Code.Root
+			>ui/</Code.Root
+		>, such as
 		<Code.Root>ui/gitlab.svg</Code.Root>, shown on the sign-in button and in the settings.
 	</p>
 
@@ -218,7 +219,8 @@
 		The built-in sign-in providers are ordinary plugins in the
 		<a href="https://github.com/pouchbase/pouchbase/tree/main/plugins"
 			><Code.Root>plugins/</Code.Root> folder</a
-		> of the Pouchbase repository, built with the same SDK. They are good examples to start from:
+		>
+		of the Pouchbase repository, built with the same SDK. They are good examples to start from:
 		<Code.Root>auth-github</Code.Root> reads a REST API with <Code.Root>fetchJson</Code.Root>, and
 		<Code.Root>auth-twitch</Code.Root> sends the client id along.
 	</p>
@@ -331,8 +333,8 @@
 		<li>the plugin id belongs to another account (<Code.Root>403</Code.Root>);</li>
 		<li>
 			that version is already published (<Code.Root>409</Code.Root>): published versions never
-			change, so bump <Code.Root>version</Code.Root> in <Code.Root>package.json</Code.Root> (or the
-			manifest) for every release.
+			change, so bump <Code.Root>version</Code.Root> in <Code.Root>package.json</Code.Root> (or the manifest)
+			for every release.
 		</li>
 	</ul>
 
