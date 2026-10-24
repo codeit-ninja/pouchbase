@@ -9,6 +9,7 @@
 		"dev": "pnpm run \"/^dev:/\"",
 		"dev:app": "vite dev",
 		"dev:site": "pnpm --filter pouchbase-site dev",
+		"dev:registry": "pnpm --filter pouchbase-registry dev",
 		"test-app": "pnpm --filter pouchbase-test dev",
 		"test-app:pouchbase": "pnpm --filter pouchbase-test pouchbase:up",
 		"build": "wrangler types --check && vite build && node scripts/worker-entry.mjs",

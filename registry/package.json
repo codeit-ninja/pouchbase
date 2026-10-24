@@ -1,0 +1,11 @@
+{
+	"name": "pouchbase-registry",
+	"private": true,
+	"license": "UNLICENSED",
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"dev": "node start.mjs",
+		"build": "pnpm --dir .. build:node"
+	}
+}

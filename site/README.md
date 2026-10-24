@@ -63,6 +63,10 @@ The first version of a plugin makes the uploader its owner; only they can publis
 
 5. The default registry of Pouchbase and the CLI is `https://api.pouchbase.io`, the host of the instance. The site Worker has a route for `api.pouchbase.io/v1/*` (`wrangler.jsonc`), which takes precedence over the instance's custom domain, so the registry API reaches the site and everything else the instance.
 
+## Local development
+
+`pnpm dev` (or `pnpm dev:site`) reads `.env` (see `.env.example`), which points at the live instance. To develop against the **development registry**, a separate instance that is linked to the live one through Pouchbase's Environments, set `POUCHBASE_URL` and `POUCHBASE_SERVICE_KEY` in `.env.development.local` instead; [`registry/README.md`](../registry/README.md) sets it up. Schema changes made there are published to the live instance from the Environments page, before the site version that needs them is deployed.
+
 ## License
 
 All rights reserved; see [LICENSE](LICENSE). The rest of the Pouchbase repository is open source under its own licenses, but the website is not.

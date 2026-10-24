@@ -3,6 +3,7 @@ packages:
   - .
   - packages/*
   - plugins/*
+  - registry
   - site
   - test-app
 
