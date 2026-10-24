@@ -25,12 +25,16 @@ export type PluginRecord = {
 	repository: string | null;
 	readme: string | null;
 	icon_url: string | null;
+	/** A JSON array. */
 	keywords: string[];
 	/** Newest version and its API version. */
 	version: string;
 	api_version: number;
-	/** Every API version the plugin has a version for, as text, to filter on. */
-	api_versions: string[];
+	/**
+	 * Every API version the plugin has a version for, as text such as `,1,2,`, so a filter can look
+	 * for `,1,` (a list field only takes values from a fixed list).
+	 */
+	api_versions: string;
 	downloads: number;
 	/** Reviewed by the Pouchbase team; only admins set it, in the dashboard. */
 	verified: boolean;

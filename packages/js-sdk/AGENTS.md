@@ -27,7 +27,7 @@ The SDK is a workspace package in the Pouchbase repository; the app is at the re
 
 ## Public API (current)
 
-Sign-ins return `{ token, user_id }`; the token is a JWT (HS256, 7 days) sent as `Authorization: Bearer <token>`. Errors are JSON `{ message, issues? }` where `issues` maps an input field to a message. The API allows any origin (CORS `*`) and never uses cookies.
+Sign-ins return `{ token, user_id }`; the token is a JWT (HS256, 7 days) sent as `Authorization: Bearer <token>`. Sign-ups return `{ token, user_id, verification_required }`; `token` is `null` when the instance requires a verified email. Errors are JSON `{ message, code?, issues? }` where `code` is a machine-readable reason (such as `email_not_verified`) and `issues` maps an input field to a message. The API allows any origin (CORS `*`) and never uses cookies.
 
 | Request                                               | SDK                                  |
 | ----------------------------------------------------- | ------------------------------------ |

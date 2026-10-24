@@ -5,8 +5,12 @@
 	import { resolve } from '$app/paths';
 	import { signUp } from '../account.remote';
 	import OauthButtons from '../oauth-buttons.svelte';
+	import VerificationCallout from '../verification-callout.svelte';
 
 	const form = signUp.preflight(signUpSchema);
+
+	// Set once the account exists and waits for its email address to be verified.
+	const created = $derived(form.result?.verify ? form.result.email : null);
 </script>
 
 <svelte:head>
@@ -23,30 +27,38 @@
 		</Card.Header>
 
 		<Card.Content class="flex flex-col gap-4">
-			<OauthButtons />
+			{#if created}
+				<VerificationCallout email={created} title="Check your inbox">
+					We sent a link to {created}. Follow it to activate your account, then
+					<a href={resolve('/account/sign-in')}>sign in</a>.
+				</VerificationCallout>
+			{:else}
+				<OauthButtons />
 
-			<Form.Root {form}>
-				<Form.Field field={form.fields.username}>
-					<Form.Label>Username</Form.Label>
-					<Form.Input autocomplete="username" />
-					<Form.Errors />
-				</Form.Field>
+				<Form.Root {form}>
+					<Form.Field field={form.fields.name}>
+						<Form.Label>Name</Form.Label>
+						<Form.Input autocomplete="name" />
+						<Form.Description>Your first and last name.</Form.Description>
+						<Form.Errors />
+					</Form.Field>
 
-				<Form.Field field={form.fields.email}>
-					<Form.Label>Email</Form.Label>
-					<Form.Input type="email" autocomplete="email" />
-					<Form.Errors />
-				</Form.Field>
+					<Form.Field field={form.fields.email}>
+						<Form.Label>Email</Form.Label>
+						<Form.Input type="email" autocomplete="email" />
+						<Form.Errors />
+					</Form.Field>
 
-				<Form.Field field={form.fields._password}>
-					<Form.Label>Password</Form.Label>
-					<Form.Input type="password" autocomplete="new-password" />
-					<Form.Description>At least 8 characters.</Form.Description>
-					<Form.Errors />
-				</Form.Field>
+					<Form.Field field={form.fields._password}>
+						<Form.Label>Password</Form.Label>
+						<Form.Input type="password" autocomplete="new-password" />
+						<Form.Description>At least 8 characters.</Form.Description>
+						<Form.Errors />
+					</Form.Field>
 
-				<Form.Submit>Create account</Form.Submit>
-			</Form.Root>
+					<Form.Submit>Create account</Form.Submit>
+				</Form.Root>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 

@@ -18,7 +18,7 @@
 		<div class="flex flex-col gap-1">
 			<h1 class="font-display text-3xl font-semibold tracking-tight text-zinc-950">Your plugins</h1>
 			{#if user}
-				<p class="text-sm text-zinc-600">Signed in as {user.username || user.email}</p>
+				<p class="text-sm text-zinc-600">Signed in as {user.name || user.email}</p>
 			{/if}
 		</div>
 

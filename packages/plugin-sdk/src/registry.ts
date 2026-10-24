@@ -23,8 +23,8 @@ import { PLUGIN_ID_PATTERN, permissionsSchema } from './manifest.js';
 
 export const REGISTRY_API_PREFIX = '/v1';
 
-/** The public registry on pouchbase.io. */
-export const DEFAULT_REGISTRY_URL = 'https://plugins.pouchbase.io';
+/** The public registry on pouchbase.io (`/v1` on the API host is served by the website). */
+export const DEFAULT_REGISTRY_URL = 'https://api.pouchbase.io';
 
 const pluginId = z.string().regex(PLUGIN_ID_PATTERN);
 

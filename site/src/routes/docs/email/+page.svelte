@@ -54,7 +54,7 @@
 		on its own tab, on a desktop or phone width, and <strong>Send test</strong> sends the email as
 		it is in the editor to you. Every
 		email also gets a plain-text version, made from the HTML. Sending needs mail settings:
-		Cloudflare Email Service or an SMTP server, under <strong>Settings</strong>.
+		Cloudflare Email Service or an SMTP server, under <strong>Sending</strong> on the same page.
 	</p>
 
 	<h2 id="variables">Variables</h2>

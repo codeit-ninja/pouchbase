@@ -83,6 +83,7 @@ export type {
 	OAuthProvider,
 	OAuthProviderInfo,
 	SignUpInput,
+	SignUpResult,
 	User,
 	UserOf
 } from './types.js';

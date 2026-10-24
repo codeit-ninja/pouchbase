@@ -15,7 +15,7 @@ function requireUser() {
 	return locals;
 }
 
-/** The OAuth providers and the username & password settings. Client secrets are never included. */
+/** The OAuth providers and the email & password settings. Client secrets are never included. */
 export const getAuthSettings = query(async () => {
 	const { services } = requireUser();
 
@@ -36,13 +36,26 @@ export const getAuthSettings = query(async () => {
 	return result.value;
 });
 
-export const updatePasswordProvider = form(passwordProviderSchema, async (data) => {
+export const updatePasswordProvider = form(passwordProviderSchema, async (data, issue) => {
 	const { services } = requireUser();
+
+	if (data.requireVerification) {
+		const mail = await services.mail().enabled();
+
+		if (mail.isErr()) {
+			error(500, mail.error.message);
+		}
+
+		if (!mail.value) {
+			invalid(issue.requireVerification('Set up mail on the Mail page first'));
+		}
+	}
 
 	const result = await services.auth().updatePasswordSettings({
 		enabled: data.enabled,
 		// Sign-up only makes sense while the provider is active.
-		signUp: data.enabled && data.signUp
+		signUp: data.enabled && data.signUp,
+		requireVerification: data.requireVerification
 	});
 
 	if (result.isErr()) {

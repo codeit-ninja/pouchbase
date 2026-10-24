@@ -52,15 +52,17 @@ describe('Pouchbase', () => {
 	it('throws a PouchbaseError with the message and issues of the API', async () => {
 		const { fetch } = mockFetch([
 			409,
-			{ message: 'Invalid input', issues: { username: 'This username is already taken' } }
+			{ message: 'Invalid input', issues: { email: 'This email address is already in use' } }
 		]);
 		const pb = new Pouchbase('https://pb.example.com', { fetch });
-		const error = await pb.auth.signUp({ username: 'ada', password: 'secret' }).catch((e) => e);
+		const error = await pb.auth
+			.signUp({ name: 'Ada Lovelace', email: 'ada@example.com', password: 'secret' })
+			.catch((e) => e);
 
 		expect(error).toBeInstanceOf(PouchbaseError);
 		expect(error.status).toBe(409);
 		expect(error.message).toBe('Invalid input');
-		expect(error.issues).toEqual({ username: 'This username is already taken' });
+		expect(error.issues).toEqual({ email: 'This email address is already in use' });
 	});
 
 	it('wraps network errors', async () => {
@@ -97,26 +99,69 @@ describe('auth', () => {
 
 		pb.authStore.onChange(listener);
 
-		await expect(pb.auth.signIn('ada', 'secret')).resolves.toEqual({ token: 'abc', userId: 'u1' });
+		await expect(pb.auth.signIn('ada@example.com', 'secret')).resolves.toEqual({
+			token: 'abc',
+			userId: 'u1'
+		});
 		expect(calls[0]?.url).toBe('https://pb.example.com/api/auth/password/sign-in');
 		expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
-			identity: 'ada',
+			email: 'ada@example.com',
 			password: 'secret'
 		});
 		expect(pb.authStore.token).toBe('abc');
 		expect(listener).toHaveBeenCalledWith({ token: 'abc', userId: 'u1', user: null });
 	});
 
+	it('gives the code of an unverified sign-in', async () => {
+		const { fetch } = mockFetch([
+			403,
+			{ message: 'Verify your email address first', code: 'email_not_verified' }
+		]);
+		const pb = new Pouchbase('https://pb.example.com', { fetch });
+		const error = await pb.auth.signIn('ada@example.com', 'secret').catch((e) => e);
+
+		expect(error).toBeInstanceOf(PouchbaseError);
+		expect(error.status).toBe(403);
+		expect(error.code).toBe('email_not_verified');
+	});
+
+	it('signs up and stores the token', async () => {
+		const { fetch, calls } = mockFetch([
+			200,
+			{ token: 'abc', user_id: 'u1', verification_required: false }
+		]);
+		const pb = new Pouchbase('https://pb.example.com', { fetch });
+		const input = { name: 'Ada Lovelace', email: 'ada@example.com', password: 'secret' };
+
+		await expect(pb.auth.signUp(input)).resolves.toEqual({
+			token: 'abc',
+			userId: 'u1',
+			verificationRequired: false
+		});
+		expect(JSON.parse(String(calls[0]?.init.body))).toEqual(input);
+		expect(pb.authStore.token).toBe('abc');
+	});
+
+	it('signs up without signing in when verification is required', async () => {
+		const { fetch } = mockFetch([200, { token: null, user_id: 'u1', verification_required: true }]);
+		const pb = new Pouchbase('https://pb.example.com', { fetch });
+
+		await expect(
+			pb.auth.signUp({ name: 'Ada Lovelace', email: 'ada@example.com', password: 'secret' })
+		).resolves.toEqual({ token: null, userId: 'u1', verificationRequired: true });
+		expect(pb.authStore.token).toBeFalsy();
+	});
+
 	it('sends the token to /api/auth/me and keeps the user', async () => {
-		const { fetch, calls } = mockFetch([200, { id: 'u1', username: 'ada' }]);
+		const { fetch, calls } = mockFetch([200, { id: 'u1', name: 'Ada Lovelace' }]);
 		const pb = new Pouchbase('https://pb.example.com', {
 			fetch,
 			authStore: new AuthStore({ token: 'abc', userId: 'u1', user: null })
 		});
 
-		await expect(pb.auth.me()).resolves.toEqual({ id: 'u1', username: 'ada' });
+		await expect(pb.auth.me()).resolves.toEqual({ id: 'u1', name: 'Ada Lovelace' });
 		expect(new Headers(calls[0]?.init.headers).get('authorization')).toBe('Bearer abc');
-		expect(pb.authStore.user).toEqual({ id: 'u1', username: 'ada' });
+		expect(pb.authStore.user).toEqual({ id: 'u1', name: 'Ada Lovelace' });
 	});
 
 	it('clears the store when /api/auth/me rejects the token', async () => {
@@ -562,7 +607,7 @@ describe('types', () => {
 	it('types me() with the users record of the collections', () => {
 		interface UsersRecord {
 			id: string;
-			username: string;
+			name: string;
 			email: string | null;
 		}
 

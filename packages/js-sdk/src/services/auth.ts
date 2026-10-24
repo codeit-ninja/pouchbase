@@ -6,6 +6,7 @@ import type {
 	OAuthProvider,
 	OAuthProviderInfo,
 	SignUpInput,
+	SignUpResult,
 	User,
 	UserOf
 } from '../types.js';
@@ -25,6 +26,8 @@ export type OAuthOptions = {
 };
 
 type SignInResponse = { token: string; user_id: string };
+
+type SignUpResponse = { token: string | null; user_id: string; verification_required?: boolean };
 
 type OAuthError = 'access_denied' | 'email_in_use' | 'sign_in_failed';
 
@@ -54,26 +57,36 @@ export class AuthService<C extends object = { users: User }> {
 	}
 
 	/**
-	 * Creates a user with a username and password and signs them in. Sends a verification email
-	 * when `email` is given and mail is set up.
-	 * @throws {PouchbaseError} `400`/`409` with `issues` per field, `403` when sign-up is off.
+	 * Creates a user with a name, email and password, and sends a verification email when mail is
+	 * set up. Signs them in, unless the instance requires a verified email: then `token` is `null`
+	 * and `verificationRequired` is `true`.
+	 * @throws {PouchbaseError} `400`/`409` with `issues` per field, `403` when sign-up is off,
+	 * `503` when a verified email is required but mail isn't set up.
 	 */
-	async signUp(input: SignUpInput): Promise<AuthResult> {
-		const response = await this.#pb.send<SignInResponse>('/api/auth/password/sign-up', {
+	async signUp(input: SignUpInput): Promise<SignUpResult> {
+		const response = await this.#pb.send<SignUpResponse>('/api/auth/password/sign-up', {
 			body: input,
 			auth: false
 		});
 
-		return this.#save(response);
+		if (response.token === null) {
+			return { token: null, userId: response.user_id, verificationRequired: true };
+		}
+
+		return {
+			...this.#save({ token: response.token, user_id: response.user_id }),
+			verificationRequired: false
+		};
 	}
 
 	/**
-	 * Signs in with a username or email, and a password.
-	 * @throws {PouchbaseError} `401` for wrong credentials, `403` when password sign-in is off.
+	 * Signs in with an email and a password.
+	 * @throws {PouchbaseError} `401` for wrong credentials, `403` when password sign-in is off, or
+	 * `403` with `code` `email_not_verified` when the address must be verified first.
 	 */
-	async signIn(identity: string, password: string): Promise<AuthResult> {
+	async signIn(email: string, password: string): Promise<AuthResult> {
 		const response = await this.#pb.send<SignInResponse>('/api/auth/password/sign-in', {
-			body: { identity, password },
+			body: { email, password },
 			auth: false
 		});
 

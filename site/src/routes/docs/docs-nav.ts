@@ -30,5 +30,9 @@ export const docsNavigation: DocsGroup[] = [
 			{ label: 'Functions', href: resolve('/docs/functions') },
 			{ label: 'Email templates', href: resolve('/docs/email') }
 		]
+	},
+	{
+		label: 'Extend Pouchbase',
+		links: [{ label: 'Plugins', href: resolve('/docs/plugins') }]
 	}
 ];

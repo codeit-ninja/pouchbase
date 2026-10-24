@@ -45,11 +45,11 @@ The first version of a plugin makes the uploader its owner; only they can publis
 
    | Collection        | Fields                                                                                                                                                                                                                                                                                          | Unique index        |
    | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-   | `plugins`         | `slug` text, `name` text, `description` text, `owner` relation to `users`, `author` text, `license` text, `homepage` URL, `repository` URL, `readme` text, `icon_url` URL, `keywords` list, `version` text, `api_version` integer, `api_versions` list, `downloads` integer, `verified` boolean | `slug`              |
+   | `plugins`         | `slug` text, `name` text, `description` text, `owner` relation to `users`, `author` text, `license` text, `homepage` URL, `repository` URL, `readme` text, `icon_url` URL, `keywords` JSON, `version` text, `api_version` integer, `api_versions` text, `downloads` integer, `verified` boolean | `slug`              |
    | `plugin_versions` | `plugin` relation to `plugins`, `version` text, `api_version` integer, `integrity` text, `size` integer, `pouchbase` text, `permissions` JSON, `bundle` text                                                                                                                                    | `plugin`, `version` |
    | `publish_tokens`  | `user` relation to `users`, `name` text, `prefix` text, `token_hash` text, `last_used_at` date                                                                                                                                                                                                  | `token_hash`        |
 
-2. Under **System → Authentication**, turn on username & password with self sign-up, and GitHub.
+2. Set up mail under **Mail**, then under **System → Authentication** turn on email & password with self sign-up and **Require a verified email** (accounts are only active once their email is verified), and GitHub.
 3. Under **System → API keys**, create a key with the **service** scope.
 4. Set the variables of the site Worker:
 
@@ -60,7 +60,7 @@ The first version of a plugin makes the uploader its owner; only they can publis
 
    For `pnpm dev`, put them in `.env`.
 
-5. Point `plugins.pouchbase.io` (the default registry of Pouchbase and the CLI) at the site Worker as a custom domain.
+5. The default registry of Pouchbase and the CLI is `https://api.pouchbase.io`, the host of the instance. The site Worker has a route for `api.pouchbase.io/v1/*` (`wrangler.jsonc`), which takes precedence over the instance's custom domain, so the registry API reaches the site and everything else the instance.
 
 ## License
 

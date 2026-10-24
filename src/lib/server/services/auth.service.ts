@@ -36,7 +36,6 @@ import { USERS_COLLECTION } from '#lib/auth/users.js';
 function authFields(): CreateFieldInput[] {
 	return [
 		{ name: 'email', type: 'email', required: false, unique: true, options: {} },
-		{ name: 'username', type: 'text', required: false, unique: true, options: {} },
 		{ name: 'name', type: 'text', required: false, unique: false, options: {} },
 		{
 			name: 'avatar',
@@ -56,8 +55,11 @@ function authFields(): CreateFieldInput[] {
 	];
 }
 
-/** Auth fields of earlier versions that have been replaced. */
-const OUTDATED_AUTH_FIELDS = ['avatar_url'];
+/**
+ * Auth fields of earlier versions that have been replaced. Users sign in with their email, so
+ * `username` is gone too.
+ */
+const OUTDATED_AUTH_FIELDS = ['avatar_url', 'username'];
 
 const TOKEN_ISSUER = 'pouchbase';
 const TOKEN_AUDIENCE = USERS_COLLECTION;
@@ -91,7 +93,12 @@ export type PasswordSettings = {
 	enabled: boolean;
 	/** Whether new users may sign up themselves; otherwise only admins create them. */
 	signUp: boolean;
+	/** Whether users must verify their email address before they can sign in with a password. */
+	requireVerification: boolean;
 };
+
+/** A new user; `token` is `null` when they must verify their email address first. */
+export type PasswordSignUpResult = { token: string | null; userId: string };
 
 /** Validation messages keyed by input field. */
 export type AuthIssues = Record<string, string>;
@@ -159,8 +166,23 @@ export class AuthService extends Service {
 						for (const field of existing.filter((candidate) =>
 							OUTDATED_AUTH_FIELDS.includes(candidate.name)
 						)) {
+							// A field that computed fields still use stays, as an ordinary field the admin can
+							// remove once those are gone.
 							chain = chain.andThen(() =>
-								this.services.fields().delete(USERS_COLLECTION, field.name, { allowSystem: true })
+								this.services
+									.fields()
+									.delete(USERS_COLLECTION, field.name, { allowSystem: true })
+									.orElse((failure) =>
+										failure.code === 7012
+											? fromPromise(
+													this.db
+														.update(fields)
+														.set({ system: false })
+														.where(eq(fields.id, field.id)),
+													(error) => this.error(11000, 'AUTH_SETUP_FAILED', error)
+												).map(() => undefined)
+											: errAsync(failure)
+									)
 							);
 						}
 
@@ -221,12 +243,12 @@ export class AuthService extends Service {
 		const settings = this.services.settings();
 
 		return settings
-			.get('auth_password_enabled')
-			.andThen((enabled) =>
-				settings
-					.get('auth_password_signup')
-					.map((signUp) => ({ enabled: enabled === 'true', signUp: signUp === 'true' }))
-			);
+			.getMany(['auth_password_enabled', 'auth_password_signup', 'auth_password_verify'])
+			.map((values) => ({
+				enabled: values.auth_password_enabled === 'true',
+				signUp: values.auth_password_signup === 'true',
+				requireVerification: values.auth_password_verify === 'true'
+			}));
 	}
 
 	updatePasswordSettings(
@@ -236,24 +258,29 @@ export class AuthService extends Service {
 
 		return settings
 			.set('auth_password_enabled', String(input.enabled))
-			.andThen(() => settings.set('auth_password_signup', String(input.signUp)));
+			.andThen(() => settings.set('auth_password_signup', String(input.signUp)))
+			.andThen(() => settings.set('auth_password_verify', String(input.requireVerification)));
 	}
 
-	/** Creates an app user with a username and password, and returns a token. */
+	/**
+	 * Creates an app user with a name, email and password, and returns a token. When verification
+	 * is required there is no token: the user signs in after following the link in the
+	 * verification email.
+	 */
 	passwordSignUp(
 		input: PasswordSignUpInput
 	): ResultAsync<
-		{ token: string; userId: string },
+		PasswordSignUpResult,
 		| EnsureUsersError
 		| ServiceError<5000, 'GET_SETTING_FAILED'>
 		| ServiceError<5001, 'SET_SETTING_FAILED'>
 		| ServiceError<11004, 'SIGN_IN_FAILED'>
 		| ServiceError<11020, 'PASSWORD_AUTH_DISABLED'>
 		| ServiceError<11021, 'SIGN_UP_DISABLED'>
-		| ServiceError<11023, 'USERNAME_TAKEN'>
 		| ServiceError<11024, 'EMAIL_TAKEN'>
 		| InvalidInputError
 		| ServiceError<11026, 'PASSWORD_AUTH_FAILED'>
+		| ServiceError<11027, 'MAIL_DISABLED'>
 	> {
 		return this.passwordSettings()
 			.andThen((settings) => {
@@ -271,7 +298,10 @@ export class AuthService extends Service {
 					return errAsync(this.invalidInput(parsed.error.issues));
 				}
 
-				return okAsync(parsed.data);
+				const data = { ...parsed.data, requireVerification: settings.requireVerification };
+
+				// Without mail, nobody could ever verify their address and sign in.
+				return settings.requireVerification ? this.requireMail().map(() => data) : okAsync(data);
 			})
 			.andThen((data) =>
 				this.ensureUsersCollection()
@@ -281,26 +311,14 @@ export class AuthService extends Service {
 							(async () => {
 								const databaseId = appDatabase.id;
 
-								const [username] = await queryDatabase(
+								const [taken] = await queryDatabase(
 									databaseId,
-									`SELECT "id" FROM "users" WHERE lower("username") = ?`,
-									[data.username]
+									`SELECT "id" FROM "users" WHERE "email" = ?`,
+									[data.email]
 								);
 
-								if (username) {
-									return { taken: 'username' as const };
-								}
-
-								if (data.email) {
-									const [email] = await queryDatabase(
-										databaseId,
-										`SELECT "id" FROM "users" WHERE "email" = ?`,
-										[data.email]
-									);
-
-									if (email) {
-										return { taken: 'email' as const };
-									}
+								if (taken) {
+									return { taken: true as const };
 								}
 
 								const userId = generateRecordId();
@@ -308,8 +326,8 @@ export class AuthService extends Service {
 
 								await queryDatabase(
 									databaseId,
-									`INSERT INTO "users" ("id", "created_at", "updated_at", "username", "email", "name", "verified") VALUES (?, ?, ?, ?, ?, ?, 0)`,
-									[userId, now, now, data.username, data.email ?? null, data.name || null]
+									`INSERT INTO "users" ("id", "created_at", "updated_at", "email", "name", "verified") VALUES (?, ?, ?, ?, ?, 0)`,
+									[userId, now, now, data.email, data.name]
 								);
 								await queryDatabase(
 									databaseId,
@@ -317,7 +335,7 @@ export class AuthService extends Service {
 									[userId, await hashPassword(data.password), now]
 								);
 
-								return { userId };
+								return { userId, requireVerification: data.requireVerification };
 							})(),
 							(error) => this.error(11026, 'PASSWORD_AUTH_FAILED', error)
 						)
@@ -325,25 +343,23 @@ export class AuthService extends Service {
 			)
 			.andThen((result) => {
 				if ('taken' in result) {
-					return errAsync(
-						result.taken === 'username'
-							? this.error(11023, 'USERNAME_TAKEN')
-							: this.error(11024, 'EMAIL_TAKEN')
-					);
+					return errAsync(this.error(11024, 'EMAIL_TAKEN'));
 				}
 
 				return this.refreshComputed(result.userId).andThen(() =>
-					this.signToken(result.userId).map((token) => ({ token, userId: result.userId }))
+					result.requireVerification
+						? okAsync({ token: null, userId: result.userId })
+						: this.signToken(result.userId).map((token) => ({ token, userId: result.userId }))
 				);
 			});
 	}
 
 	/**
-	 * Checks a username or email (when the identity contains an `@`) and password, and returns a
-	 * token.
+	 * Checks an email and password, and returns a token. When verification is required, a user
+	 * whose address isn't verified yet gets `EMAIL_NOT_VERIFIED`, but only with the right password.
 	 */
 	passwordSignIn(
-		identity: string,
+		email: string,
 		password: string
 	): ResultAsync<
 		{ token: string; userId: string },
@@ -354,22 +370,24 @@ export class AuthService extends Service {
 		| ServiceError<11020, 'PASSWORD_AUTH_DISABLED'>
 		| ServiceError<11022, 'INVALID_CREDENTIALS'>
 		| ServiceError<11026, 'PASSWORD_AUTH_FAILED'>
+		| ServiceError<11032, 'EMAIL_NOT_VERIFIED'>
 	> {
 		return this.passwordSettings()
 			.andThen((settings) =>
 				settings.enabled
-					? this.services.database().requireApp()
+					? this.services
+							.database()
+							.requireApp()
+							.map((appDatabase) => ({ appDatabase, settings }))
 					: errAsync(this.error(11020, 'PASSWORD_AUTH_DISABLED'))
 			)
-			.andThen((appDatabase) =>
+			.andThen(({ appDatabase, settings }) =>
 				fromPromise(
 					(async () => {
-						const normalized = identity.trim().toLowerCase();
-						const column = normalized.includes('@') ? 'email' : 'username';
 						const [row] = await queryDatabase(
 							appDatabase.id,
-							`SELECT "users"."id", "_passwords"."hash" FROM "users" JOIN "_passwords" ON "_passwords"."user_id" = "users"."id" WHERE lower("users"."${column}") = ?`,
-							[normalized]
+							`SELECT "users"."id", "_passwords"."hash", "users"."verified" FROM "users" JOIN "_passwords" ON "_passwords"."user_id" = "users"."id" WHERE "users"."email" = ?`,
+							[email.trim().toLowerCase()]
 						);
 
 						if (!row) {
@@ -378,16 +396,29 @@ export class AuthService extends Service {
 							return null;
 						}
 
-						return (await verifyPassword(password, String(row[1]))) ? String(row[0]) : null;
+						if (!(await verifyPassword(password, String(row[1])))) {
+							return null;
+						}
+
+						return {
+							userId: String(row[0]),
+							unverified: settings.requireVerification && !Number(row[2])
+						};
 					})(),
 					(error) => this.error(11026, 'PASSWORD_AUTH_FAILED', error)
 				)
 			)
-			.andThen((userId) =>
-				userId
-					? this.signToken(userId).map((token) => ({ token, userId }))
-					: errAsync(this.error(11022, 'INVALID_CREDENTIALS'))
-			);
+			.andThen((user) => {
+				if (!user) {
+					return errAsync(this.error(11022, 'INVALID_CREDENTIALS'));
+				}
+
+				if (user.unverified) {
+					return errAsync(this.error(11032, 'EMAIL_NOT_VERIFIED'));
+				}
+
+				return this.signToken(user.userId).map((token) => ({ token, userId: user.userId }));
+			});
 	}
 
 	/** Sets (or replaces) the password of an app user; used by admins. */

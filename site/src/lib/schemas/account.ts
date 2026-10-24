@@ -1,31 +1,30 @@
 import { MAX_BUNDLE_SIZE } from '@pouchbasejs/plugin-sdk';
 import { z } from 'zod';
 
-/** Signing in with a username or email and a password. */
+const email = z.string().trim().toLowerCase().pipe(z.email('Invalid email address'));
+
+/** Signing in with an email and a password. */
 export const signInSchema = z.object({
-	identity: z.string().trim().min(1, 'Enter your username or email'),
+	email: z.string().trim().min(1, 'Enter your email address'),
 	_password: z.string().min(1, 'Enter your password'),
 	redirectTo: z.string().optional()
 });
 
 /**
  * A new account, with the rules of the instance's sign-up (`passwordSignUpSchema` in the app), so
- * mistakes show before the request; the instance checks that username and email are unique.
+ * mistakes show before the request; the instance checks that the email is unique.
  */
 export const signUpSchema = z.object({
-	username: z
-		.string()
-		.trim()
-		.toLowerCase()
-		.min(3, 'Username must be at least 3 characters')
-		.max(32, 'Username must be at most 32 characters')
-		.regex(/^[a-z0-9_.-]+$/, 'Only letters, numbers, dots, dashes and underscores'),
-	email: z.string().trim().toLowerCase().pipe(z.email('Invalid email address')),
+	name: z.string().trim().min(1, 'Enter your name').max(100, 'Name must be at most 100 characters'),
+	email,
 	_password: z
 		.string()
 		.min(8, 'Password must be at least 8 characters')
 		.max(128, 'Password must be at most 128 characters')
 });
+
+/** Sending the verification email again. */
+export const verificationSchema = z.object({ email });
 
 /** A new publish token for `pouchbase-plugin publish`. */
 export const publishTokenSchema = z.object({

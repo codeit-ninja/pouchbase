@@ -26,7 +26,7 @@ try {
 	await pb.auth.signIn('ada@example.com', 'correct horse battery staple');
 } catch (error) {
 	if (isPouchbaseError(error, 'unauthorized')) {
-		// Wrong username, email or password.
+		// Wrong email or password.
 	}
 }
 
@@ -39,8 +39,8 @@ const { items } = await pb.db.posts.findMany({ where: { status: 'published' } })
 | Method                                      | Request                                 |
 | ------------------------------------------- | --------------------------------------- |
 | `pb.auth.providers()`                       | `GET /api/auth/providers`               |
-| `pb.auth.signUp({ username, password, … })` | `POST /api/auth/password/sign-up`       |
-| `pb.auth.signIn(identity, password)`        | `POST /api/auth/password/sign-in`       |
+| `pb.auth.signUp({ name, email, password })`  | `POST /api/auth/password/sign-up`       |
+| `pb.auth.signIn(email, password)`           | `POST /api/auth/password/sign-in`       |
 | `pb.auth.signInWithOAuth(provider)`         | OAuth popup with PKCE, then polls       |
 | `pb.auth.me()`                              | `GET /api/auth/me`                      |
 | `pb.auth.signOut()`                         | Clears the auth store                   |

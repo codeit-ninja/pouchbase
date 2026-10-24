@@ -17,13 +17,22 @@ export const password = snippet(
 	`
 import { isPouchbaseError } from '@pouchbasejs/js-sdk';
 
-await pb.auth.signUp({ username: 'ada', password: 'correct horse battery staple', email: 'ada@example.com' });
+const { verificationRequired } = await pb.auth.signUp({
+	name: 'Ada Lovelace',
+	email: 'ada@example.com',
+	password: 'correct horse battery staple'
+});
+// verificationRequired: no token yet, Ada signs in after following the link in the email
 
 try {
-	await pb.auth.signIn('ada@example.com', 'correct horse battery staple'); // username or email
+	await pb.auth.signIn('ada@example.com', 'correct horse battery staple');
 } catch (error) {
 	if (isPouchbaseError(error, 'unauthorized')) {
-		// Wrong username, email or password.
+		// Wrong email or password.
+	}
+
+	if (isPouchbaseError(error) && error.code === 'email_not_verified') {
+		await pb.auth.requestVerification('ada@example.com'); // send the link again
 	}
 }
 

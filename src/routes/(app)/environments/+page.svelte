@@ -12,6 +12,7 @@
 	import CreateDeployTokenDialog from './create-deploy-token-dialog.svelte';
 	import DeleteDeployTokenDialog from './delete-deploy-token-dialog.svelte';
 	import DeploymentsCard from './deployments-card.svelte';
+	import EnvironmentCard from './environment-card.svelte';
 	import { getDeployTokens } from './environments.remote';
 	import LinkedInstanceCard from './linked-instance-card.svelte';
 
@@ -45,6 +46,8 @@
 				</Page.Description>
 			</div>
 		</Page.Header>
+
+		<EnvironmentCard />
 
 		<LinkedInstanceCard />
 

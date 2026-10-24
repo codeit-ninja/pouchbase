@@ -14,7 +14,7 @@
 		{ id: 'the-sdk', title: 'The SDK' },
 		{ id: 'app-users', title: 'App users' },
 		{ id: 'sign-in-methods', title: 'Sign-in methods' },
-		{ id: 'password', title: 'Username and password' },
+		{ id: 'password', title: 'Email and password' },
 		{ id: 'oauth', title: 'OAuth' },
 		{ id: 'mail', title: 'Verification and password reset' },
 		{ id: 'tokens', title: 'Tokens' },
@@ -25,11 +25,11 @@
 		['GET /api/auth/providers', 'The active OAuth providers'],
 		[
 			'POST /api/auth/password/sign-up',
-			'{ username, password, email?, name? }; 400 or 409 with issues per field'
+			'{ name, email, password } → { token, user_id, verification_required }; 400 or 409 with issues per field'
 		],
 		[
 			'POST /api/auth/password/sign-in',
-			'{ identity, password }, with a username or email; 401 for wrong credentials'
+			'{ email, password }; 401 for wrong credentials, 403 (email_not_verified) until the email is verified'
 		],
 		['POST /api/auth/password/request-reset', '{ email }; the same answer for unknown addresses'],
 		[
@@ -52,7 +52,7 @@
 
 <DocsPage
 	title="Authentication"
-	description="Sign the users of your app in with a username and password or with OAuth, and send their token along with every request."
+	description="Sign the users of your app in with an email and password or with OAuth, and send their token along with every request."
 	{sections}
 >
 	<h2 id="the-sdk">The SDK</h2>
@@ -89,8 +89,8 @@
 	<p>
 		Every installation has a built-in <Code.Root>users</Code.Root> collection for the users of your app,
 		separate from the admins who sign in to the Pouchbase admin. It has the fields
-		<Code.Root>email</Code.Root> and <Code.Root>username</Code.Root> (both unique),
-		<Code.Root>name</Code.Root>, <Code.Root>avatar</Code.Root> (a relation to
+		<Code.Root>email</Code.Root> (unique), <Code.Root>name</Code.Root> (the full name),
+		<Code.Root>avatar</Code.Root> (a relation to
 		<Code.Root>files</Code.Root>) and <Code.Root>verified</Code.Root>, which can't be renamed or
 		deleted; you can add fields of your own. Password hashes are kept in an internal table, never in
 		<Code.Root>users</Code.Root>.
@@ -113,8 +113,9 @@
 
 	<ul>
 		<li>
-			<strong>Username and password</strong>, optionally with sign-up by the users themselves.
-			Admins set a user's password in the <Code.Root>users</Code.Root> collection.
+			<strong>Email and password</strong>, optionally with sign-up by the users themselves and
+			<strong>Require a verified email</strong>, so accounts are only active once their address is
+			verified. Admins set a user's password in the <Code.Root>users</Code.Root> collection.
 		</li>
 		<li>
 			<strong>OAuth</strong> with Google, GitHub, Microsoft, Discord and Twitch. Create an OAuth app at
@@ -123,7 +124,7 @@
 		</li>
 	</ul>
 
-	<h2 id="password">Username and password</h2>
+	<h2 id="password">Email and password</h2>
 
 	<CodeBlock.Root title="TypeScript">
 		<CodeBlock.Source code={data.code.password} />
@@ -131,9 +132,12 @@
 
 	<p>
 		A sign-up fails with <Code.Root>invalid</Code.Root> (400) or <Code.Root>conflict</Code.Root> (409,
-		for a username or email that is taken), with a message per field in
-		<Code.Root>issues</Code.Root>. With mail set up, a sign-up with an email address sends a
-		verification email.
+		for an email that is taken), with a message per field in <Code.Root>issues</Code.Root>. With
+		mail set up, every sign-up sends a verification email. When a verified email is required, a
+		sign-up returns no token (<Code.Root>verificationRequired</Code.Root> is <Code.Root
+			>true</Code.Root
+		>), and signing in fails with <Code.Root>forbidden</Code.Root> (403) and the code
+		<Code.Root>email_not_verified</Code.Root> until the user followed the link.
 	</p>
 
 	<h2 id="oauth">OAuth</h2>
@@ -164,8 +168,7 @@
 	<h2 id="mail">Verification and password reset</h2>
 
 	<p>
-		Verification and password reset emails need mail settings, under <strong>Settings → Mail</strong
-		>
+		Verification and password reset emails need mail settings, under <strong>Mail → Sending</strong>
 		in the admin, which has a button to test them:
 	</p>
 

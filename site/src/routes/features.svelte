@@ -41,8 +41,8 @@
 				</span>
 				<h3 class="font-display text-xl font-semibold text-zinc-950">Users and sign-in</h3>
 				<p class="text-zinc-600">
-					A built-in users collection with username and password sign-in, optional self sign-up, and
-					OAuth with the providers your users already have.
+					A built-in users collection with email and password sign-in, optional self sign-up and
+					email verification, and OAuth with the providers your users already have.
 				</p>
 				<ul class="flex flex-wrap gap-1.5" aria-label="OAuth providers">
 					{#each providers as provider (provider)}

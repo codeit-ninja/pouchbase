@@ -231,7 +231,7 @@
 							<Form.Description>
 								{record
 									? 'Leave empty to keep the current password.'
-									: 'Lets the user sign in with their username and this password.'}
+									: 'Lets the user sign in with their email and this password.'}
 							</Form.Description>
 							<Form.Errors />
 						</Form.Field>

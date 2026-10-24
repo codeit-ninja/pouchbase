@@ -34,17 +34,7 @@
 						Dashboard
 					</Navigation.Link>
 				</Navigation.Item>
-			</Navigation.Root>
-		</Sidebar.Group>
 
-		<CollectionsNavigation />
-
-		<Sidebar.Group>
-			<Sidebar.GroupHeader class="h-row">
-				<Sidebar.GroupLabel>System</Sidebar.GroupLabel>
-			</Sidebar.GroupHeader>
-
-			<Navigation.Root aria-label="System">
 				<Navigation.Item>
 					<Navigation.Link href={resolve('/(app)/functions')}>
 						<Icon.Root icon="lucide:square-function" />
@@ -59,6 +49,23 @@
 					</Navigation.Link>
 				</Navigation.Item>
 
+				<Navigation.Item>
+					<Navigation.Link href={resolve('/(app)/plugins')}>
+						<Icon.Root icon="lucide:puzzle" />
+						Plugins
+					</Navigation.Link>
+				</Navigation.Item>
+			</Navigation.Root>
+		</Sidebar.Group>
+
+		<CollectionsNavigation />
+
+		<Sidebar.Group>
+			<Sidebar.GroupHeader class="h-row">
+				<Sidebar.GroupLabel>System</Sidebar.GroupLabel>
+			</Sidebar.GroupHeader>
+
+			<Navigation.Root aria-label="System">
 				<Navigation.Item>
 					<Navigation.Link href={resolve('/(app)/storage')}>
 						<Icon.Root icon="lucide:hard-drive" />
@@ -105,20 +112,6 @@
 					<Navigation.Link href={resolve('/(app)/types')}>
 						<Icon.Root icon="lucide:file-code" />
 						Types
-					</Navigation.Link>
-				</Navigation.Item>
-
-				<Navigation.Item>
-					<Navigation.Link href={resolve('/(app)/plugins')}>
-						<Icon.Root icon="lucide:puzzle" />
-						Plugins
-					</Navigation.Link>
-				</Navigation.Item>
-
-				<Navigation.Item>
-					<Navigation.Link href={resolve('/(app)/settings')}>
-						<Icon.Root icon="lucide:settings" />
-						Settings
 					</Navigation.Link>
 				</Navigation.Item>
 			</Navigation.Root>

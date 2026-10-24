@@ -43,13 +43,21 @@ export type AuthResult = {
 	userId: string;
 };
 
+/**
+ * The result of `pb.auth.signUp()`. When the instance requires a verified email, `token` is `null`
+ * and the user signs in after following the link in the verification email.
+ */
+export type SignUpResult =
+	| (AuthResult & { verificationRequired: false })
+	| { token: null; userId: string; verificationRequired: true };
+
 /** Input for `pb.auth.signUp()`. */
 export type SignUpInput = {
-	username: string;
+	/** Full name, such as `Ada Lovelace`. */
+	name: string;
+	email: string;
 	password: string;
-	email?: string;
-	name?: string;
 };
 
-/** Validation messages keyed by input field, such as `{ username: 'This username is already taken' }`. */
+/** Validation messages keyed by input field, such as `{ email: 'This email address is already in use' }`. */
 export type Issues = Record<string, string>;

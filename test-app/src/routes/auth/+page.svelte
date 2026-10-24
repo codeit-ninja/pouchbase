@@ -8,8 +8,8 @@
 	const runner = new Runner();
 
 	let providers = $state<OAuthProviderInfo[]>([]);
-	let signUp = $state({ username: '', email: '', name: '', password: '' });
-	let signIn = $state({ identity: '', password: '' });
+	let signUp = $state({ name: '', email: '', password: '' });
+	let signIn = $state({ email: '', password: '' });
 	let email = $state('');
 	let token = $state('');
 	let newPassword = $state('');
@@ -45,17 +45,15 @@
 				event.preventDefault();
 				runner.run(() =>
 					pb.auth.signUp({
-						username: signUp.username,
-						password: signUp.password,
-						email: signUp.email || undefined,
-						name: signUp.name || undefined
+						name: signUp.name,
+						email: signUp.email,
+						password: signUp.password
 					})
 				);
 			}}
 		>
-			<label>Username <input bind:value={signUp.username} autocomplete="off" /></label>
-			<label>Email <input bind:value={signUp.email} type="email" /></label>
-			<label>Name <input bind:value={signUp.name} /></label>
+			<label>Name <input bind:value={signUp.name} autocomplete="name" /></label>
+			<label>Email <input bind:value={signUp.email} type="email" autocomplete="email" /></label>
 			<label>
 				Password <input bind:value={signUp.password} type="password" autocomplete="new-password" />
 			</label>
@@ -68,10 +66,10 @@
 			class="stack"
 			onsubmit={(event) => {
 				event.preventDefault();
-				runner.run(() => pb.auth.signIn(signIn.identity, signIn.password));
+				runner.run(() => pb.auth.signIn(signIn.email, signIn.password));
 			}}
 		>
-			<label>Username or email <input bind:value={signIn.identity} /></label>
+			<label>Email <input bind:value={signIn.email} type="email" autocomplete="email" /></label>
 			<label>
 				Password
 				<input bind:value={signIn.password} type="password" autocomplete="current-password" />

@@ -56,7 +56,7 @@ const VERSION_FIELDS = [
 
 type VersionRow = Pick<PluginVersionRecord, (typeof VERSION_FIELDS)[number]>;
 
-/** URL of the registry API on this site, e.g. `https://plugins.pouchbase.io/v1`. */
+/** URL of the registry API on this site, e.g. `https://api.pouchbase.io/v1`. */
 export function registryBase(origin: string) {
 	return origin + REGISTRY_API_PREFIX;
 }
@@ -96,6 +96,11 @@ function toVersion(origin: string, slug: string, row: VersionRow): PluginVersion
 		permissions: { network: row.permissions?.network ?? [] },
 		publishedAt: iso(row.created_at)
 	};
+}
+
+/** API versions as `plugins.api_versions` stores them: `,1,2,`. */
+function apiVersionList(versions: number[]) {
+	return `,${[...new Set(versions)].sort((a, b) => a - b).join(',')},`;
 }
 
 /** Newest first, by semver. */
@@ -150,7 +155,7 @@ export async function searchPlugins(input: SearchInput): Promise<PluginList> {
 
 	if (input.apiVersions.length) {
 		conditions.push({
-			$or: input.apiVersions.map((version) => ({ api_versions: { has: String(version) } }))
+			$or: input.apiVersions.map((version) => ({ api_versions: { contains: `,${version},` } }))
 		});
 	}
 
@@ -334,12 +339,15 @@ export async function publishVersion(
 				owner: userId,
 				readme: null,
 				icon_url: null,
-				api_versions: [String(manifest.apiVersion)],
+				api_versions: apiVersionList([manifest.apiVersion]),
 				downloads: 0,
 				verified: false
 			});
 		} else {
-			const apiVersions = [...new Set([...plugin.api_versions, String(manifest.apiVersion)])];
+			const apiVersions = apiVersionList([
+				...plugin.api_versions.split(',').filter(Boolean).map(Number),
+				manifest.apiVersion
+			]);
 			const newest = semver.gt(manifest.version, plugin.version);
 
 			plugin = await db.plugins.patch(

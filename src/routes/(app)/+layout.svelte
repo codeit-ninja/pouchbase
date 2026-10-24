@@ -26,8 +26,7 @@
 		'/(app)/auth': 'Authentication',
 		'/(app)/environments': 'Environments',
 		'/(app)/functions': 'Functions',
-		'/(app)/mail': 'Mail',
-		'/(app)/settings': 'Settings'
+		'/(app)/mail': 'Mail'
 	};
 </script>
 

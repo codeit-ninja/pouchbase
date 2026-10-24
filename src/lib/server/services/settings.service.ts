@@ -13,10 +13,12 @@ export type SettingKey =
 	| 'app_database_name'
 	/** Secret for signing app user tokens. */
 	| 'auth_token_secret'
-	/** `true` when app users can sign in with username and password. */
+	/** `true` when app users can sign in with email and password. */
 	| 'auth_password_enabled'
-	/** `true` when app users can sign up themselves with username and password. */
+	/** `true` when app users can sign up themselves with email and password. */
 	| 'auth_password_signup'
+	/** `true` when app users must verify their email address before signing in with a password. */
+	| 'auth_password_verify'
 	/** Name of the storage bucket that holds uploaded files. */
 	| 'files_bucket_name'
 	/** The Workers plan of the Cloudflare account (`free` or `paid`), for the dashboard's limits. */

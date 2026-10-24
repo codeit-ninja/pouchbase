@@ -8,6 +8,9 @@
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
 	},
+	// The registry API on the host of the instance behind the site: a route takes precedence over
+	// the instance's custom domain, so only `/v1` reaches this Worker (see README.md).
+	"routes": [{ "pattern": "api.pouchbase.io/v1/*", "zone_name": "pouchbase.io" }],
 	"workers_dev": true,
 	"preview_urls": true
 }

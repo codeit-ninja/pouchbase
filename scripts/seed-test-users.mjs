@@ -5,7 +5,7 @@
  *   pnpm seed:test-users            # add (or refresh) the test users
  *   pnpm seed:test-users --remove   # delete them again
  *
- * Every test user with a password uses TEST_PASSWORD below. Their usernames start with `test_`
+ * Every test user with a password uses TEST_PASSWORD below. Their emails start with `test.`
  * and their OAuth links use fake `test-…` account ids, so they can't sign in through a real
  * provider. Uses wrangler with the credentials from `.env`.
  */
@@ -22,33 +22,29 @@ const PBKDF2_ITERATIONS = 100_000;
 
 const USERS = [
 	{
-		username: 'test_alice',
 		name: 'Alice Tester',
-		email: 'alice@example.com',
+		email: 'test.alice@example.com',
 		verified: true,
 		password: true,
 		oauth: []
 	},
 	{
-		username: 'test_bob',
 		name: 'Bob Tester',
-		email: 'bob@example.com',
+		email: 'test.bob@example.com',
 		verified: true,
 		password: true,
 		oauth: [{ provider: 'github', providerId: 'test-github-1001' }]
 	},
 	{
-		username: 'test_carol',
 		name: 'Carol Tester',
-		email: 'carol@example.com',
+		email: 'test.carol@example.com',
 		verified: true,
 		password: false,
 		oauth: [{ provider: 'google', providerId: 'test-google-2002' }]
 	},
 	{
-		username: 'test_dave',
 		name: 'Dave Tester',
-		email: null,
+		email: 'test.dave@example.com',
 		verified: false,
 		password: false,
 		oauth: [
@@ -58,9 +54,8 @@ const USERS = [
 	},
 	{
 		// No sign-in method at all, to show how that looks.
-		username: 'test_erin',
 		name: 'Erin Tester',
-		email: 'erin@example.com',
+		email: 'test.erin@example.com',
 		verified: false,
 		password: false,
 		oauth: []
@@ -109,20 +104,20 @@ function seedStatements() {
 	const now = Date.now();
 
 	return USERS.flatMap((user) => {
-		const select = `SELECT "id" FROM "users" WHERE "username" = ${sql(user.username)}`;
+		const select = `SELECT "id" FROM "users" WHERE "email" = ${sql(user.email)}`;
 		const statements = [
-			`INSERT INTO "users" ("id", "created_at", "updated_at", "username", "email", "name", "verified") SELECT ${sql(recordId())}, ${now}, ${now}, ${sql(user.username)}, ${sql(user.email)}, ${sql(user.name)}, ${user.verified ? 1 : 0} WHERE NOT EXISTS (${select});`
+			`INSERT INTO "users" ("id", "created_at", "updated_at", "email", "name", "verified") SELECT ${sql(recordId())}, ${now}, ${now}, ${sql(user.email)}, ${sql(user.name)}, ${user.verified ? 1 : 0} WHERE NOT EXISTS (${select});`
 		];
 
 		if (user.password) {
 			statements.push(
-				`INSERT OR REPLACE INTO "_passwords" ("user_id", "hash", "updated_at") SELECT "id", ${sql(hashPassword(TEST_PASSWORD))}, ${now} FROM "users" WHERE "username" = ${sql(user.username)};`
+				`INSERT OR REPLACE INTO "_passwords" ("user_id", "hash", "updated_at") SELECT "id", ${sql(hashPassword(TEST_PASSWORD))}, ${now} FROM "users" WHERE "email" = ${sql(user.email)};`
 			);
 		}
 
 		for (const link of user.oauth) {
 			statements.push(
-				`INSERT OR IGNORE INTO "_external_auths" ("id", "user_id", "provider", "provider_id", "created_at") SELECT ${sql(recordId())}, "id", ${sql(link.provider)}, ${sql(link.providerId)}, ${now} FROM "users" WHERE "username" = ${sql(user.username)};`
+				`INSERT OR IGNORE INTO "_external_auths" ("id", "user_id", "provider", "provider_id", "created_at") SELECT ${sql(recordId())}, "id", ${sql(link.provider)}, ${sql(link.providerId)}, ${now} FROM "users" WHERE "email" = ${sql(user.email)};`
 			);
 		}
 
@@ -131,13 +126,13 @@ function seedStatements() {
 }
 
 function removeStatements() {
-	const usernames = USERS.map((user) => sql(user.username)).join(', ');
-	const ids = `SELECT "id" FROM "users" WHERE "username" IN (${usernames})`;
+	const emails = USERS.map((user) => sql(user.email)).join(', ');
+	const ids = `SELECT "id" FROM "users" WHERE "email" IN (${emails})`;
 
 	return [
 		`DELETE FROM "_passwords" WHERE "user_id" IN (${ids});`,
 		`DELETE FROM "_external_auths" WHERE "user_id" IN (${ids});`,
-		`DELETE FROM "users" WHERE "username" IN (${usernames});`
+		`DELETE FROM "users" WHERE "email" IN (${emails});`
 	];
 }
 
@@ -156,5 +151,5 @@ try {
 console.log(
 	remove
 		? `Removed the test users from ${database}.`
-		: `Added ${USERS.length} test users to ${database}: ${USERS.map((user) => user.username).join(', ')}.\nUsers with a password use TEST_PASSWORD from scripts/seed-test-users.mjs.`
+		: `Added ${USERS.length} test users to ${database}: ${USERS.map((user) => user.email).join(', ')}.\nUsers with a password use TEST_PASSWORD from scripts/seed-test-users.mjs.`
 );

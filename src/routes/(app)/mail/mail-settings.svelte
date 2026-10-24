@@ -5,7 +5,7 @@
 	import * as Form from '#lib/components/ui/form/index.js';
 	import * as Icon from '#lib/components/ui/icon/index.js';
 	import { mailSettingsSchema, testMailSchema } from '#lib/schemas/mail.js';
-	import { getMailSettings, sendTestMail, updateMailSettings } from './settings.remote';
+	import { getMailSettings, sendTestMail, updateMailSettings } from './mail.remote';
 
 	const settings = $derived(await getMailSettings());
 
@@ -43,9 +43,10 @@
 
 <Card.Root>
 	<Card.Header>
-		<Card.Title>Mail</Card.Title>
+		<Card.Title>Sending</Card.Title>
 		<Card.Description>
-			Used for verification and password reset emails to the users of your app.
+			Used for your templates and for the verification and password reset emails to the users of
+			your app.
 		</Card.Description>
 	</Card.Header>
 

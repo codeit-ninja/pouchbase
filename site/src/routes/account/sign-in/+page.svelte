@@ -6,10 +6,14 @@
 	import { page } from '$app/state';
 	import { signIn } from '../account.remote';
 	import OauthButtons from '../oauth-buttons.svelte';
+	import VerificationCallout from '../verification-callout.svelte';
 
 	const form = signIn.preflight(signInSchema);
 
 	const redirectTo = $derived(page.url.searchParams.get('redirectTo') ?? '/account');
+
+	// Set when the password was right but the email address isn't verified yet.
+	const unverified = $derived(form.result?.unverified ? form.result.email : null);
 </script>
 
 <svelte:head>
@@ -25,14 +29,20 @@
 		</Card.Header>
 
 		<Card.Content class="flex flex-col gap-4">
+			{#if unverified}
+				<VerificationCallout email={unverified} title="Verify your email address">
+					Your account is active once you follow the link we sent to {unverified}.
+				</VerificationCallout>
+			{/if}
+
 			<OauthButtons {redirectTo} />
 
 			<Form.Root {form}>
 				<Form.Hidden field={form.fields.redirectTo} value={redirectTo} />
 
-				<Form.Field field={form.fields.identity}>
-					<Form.Label>Username or email</Form.Label>
-					<Form.Input autocomplete="username" />
+				<Form.Field field={form.fields.email}>
+					<Form.Label>Email</Form.Label>
+					<Form.Input type="email" autocomplete="email" />
 					<Form.Errors />
 				</Form.Field>
 

@@ -113,7 +113,7 @@ Pouchbase compiles the `.svelte` files with its own Svelte compiler on install a
 
 ## Registry API
 
-The dashboard and the CLI talk to a plugin registry (`https://plugins.pouchbase.io` by default) through `createRegistryClient`. Any server that implements these endpoints can be a registry:
+The dashboard and the CLI talk to a plugin registry (`https://api.pouchbase.io` by default) through `createRegistryClient`. Any server that implements these endpoints can be a registry:
 
 | Method | Path                                        | Response                                                                                |
 | ------ | ------------------------------------------- | --------------------------------------------------------------------------------------- |

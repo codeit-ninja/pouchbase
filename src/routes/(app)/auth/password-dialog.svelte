@@ -7,7 +7,7 @@
 	import { updatePasswordProvider } from './auth-settings.remote';
 
 	type Props = {
-		settings: { signUp: boolean };
+		settings: { signUp: boolean; requireVerification: boolean };
 	} & DialogProps;
 
 	let { settings, close }: Props = $props();
@@ -19,10 +19,10 @@
 	<Dialog.Header>
 		<Dialog.Title class="flex items-center gap-2">
 			<Icon.Root icon="lucide:key-round" class="size-5" />
-			Username & password
+			Email & password
 		</Dialog.Title>
 		<Dialog.Description>
-			Users sign in with the <span class="font-mono">username</span> of their record in
+			Users sign in with the <span class="font-mono">email</span> of their record in
 			<span class="font-mono">users</span> and a password. You can set a user's password in the
 			<span class="font-mono">users</span> collection.
 		</Dialog.Description>
@@ -30,7 +30,7 @@
 
 	<Form.Root
 		{form}
-		success="Username & password settings saved"
+		success="Email & password settings saved"
 		enhance={async (instance) => {
 			if (await instance.submit()) {
 				close();
@@ -42,7 +42,7 @@
 			<Form.Checkbox defaultChecked />
 			<Form.Label>Active</Form.Label>
 			<Form.Description class="w-full pl-6">
-				Users can sign in with their username and password.
+				Users can sign in with their email and password.
 			</Form.Description>
 		</Form.Field>
 
@@ -51,6 +51,15 @@
 			<Form.Label>Allow sign-up</Form.Label>
 			<Form.Description class="w-full pl-6">
 				New users can create an account themselves. Otherwise only you create users.
+			</Form.Description>
+		</Form.Field>
+
+		<Form.Field field={form.fields.requireVerification} orientation="horizontal">
+			<Form.Checkbox defaultChecked={settings.requireVerification} />
+			<Form.Label>Require a verified email</Form.Label>
+			<Form.Description class="w-full pl-6">
+				Users can only sign in after following the link in the verification email. Needs mail to be
+				set up on the Mail page.
 			</Form.Description>
 		</Form.Field>
 

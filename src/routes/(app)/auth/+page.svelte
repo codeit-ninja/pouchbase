@@ -18,7 +18,7 @@
 
 	type OAuthSettings = (typeof settings.providers)[number];
 
-	/** Username & password and the OAuth providers, as tiles. */
+	/** Email & password and the OAuth providers, as tiles. */
 	type Method =
 		| { kind: 'password'; key: string; label: string; icon: string; active: boolean }
 		| {
@@ -34,7 +34,7 @@
 		{
 			kind: 'password',
 			key: 'password',
-			label: 'Username & password',
+			label: 'Email & password',
 			icon: 'lucide:key-round',
 			active: settings.password.enabled
 		},
@@ -56,12 +56,12 @@
 		{
 			method: 'POST',
 			path: '/api/auth/password/sign-up',
-			purpose: 'Create a user: { username, password, email?, name? }'
+			purpose: 'Create a user: { name, email, password }'
 		},
 		{
 			method: 'POST',
 			path: '/api/auth/password/sign-in',
-			purpose: 'Sign in: { username, password }'
+			purpose: 'Sign in: { email, password }'
 		},
 		{
 			method: 'POST',

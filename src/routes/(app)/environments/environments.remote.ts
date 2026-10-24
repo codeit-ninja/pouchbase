@@ -5,9 +5,11 @@ import { z } from 'zod';
 
 import { command, form, getRequestEvent, query } from '$app/server';
 
+import { getEnvironment } from '#lib/remote/settings.remote.js';
 import {
 	deployTokenIdSchema,
 	deployTokenSchema,
+	environmentSchema,
 	linkRemoteSchema
 } from '#lib/schemas/environments.js';
 
@@ -47,6 +49,22 @@ function remoteFailure(failure: ServiceError<number, string>): never {
 
 	error(500, failure.message);
 }
+
+export const updateEnvironment = form(environmentSchema, async (data) => {
+	const { services } = requireUser();
+
+	const result = await services
+		.environments()
+		.set(data.environment === 'none' ? null : data.environment);
+
+	if (result.isErr()) {
+		error(500, result.error.message);
+	}
+
+	void getEnvironment().refresh();
+
+	return { saved: true };
+});
 
 export const getDeployTokens = query(async () => {
 	const { services } = requireUser();

@@ -22,7 +22,7 @@
 ## Features
 
 - Collections, fields and indexes, managed from the admin interface. A records API is planned.
-- Built-in user management with username and password sign-in and OAuth (Google, GitHub, Microsoft, Discord and Twitch).
+- Built-in user management with email and password sign-in and OAuth (Google, GitHub, Microsoft, Discord and Twitch).
 - Realtime: apps follow changes to records over a WebSocket, filtered by each collection's view rule.
 - A built-in `files` collection for uploads.
 - An install page that creates the databases and the first admin account, or an install from `POUCHBASE_ADMIN_EMAIL` and `POUCHBASE_ADMIN_PASSWORD`.
@@ -192,53 +192,53 @@ The schema lives in `src/lib/server/db/schema.ts` (Drizzle). After changing it, 
 
 ## App users & authentication
 
-Every installation has a built-in `users` collection for the users of **your app** (separate from the Pouchbase admin account). It has the auth fields `email` and `username` (both unique), `name`, `avatar` (a relation to `files`) and `verified`, which can't be renamed or deleted; you can add your own fields. Password hashes are stored in an internal table, never in `users`.
+Every installation has a built-in `users` collection for the users of **your app** (separate from the Pouchbase admin account). It has the auth fields `email` (unique), `name` (the full name), `avatar` (a relation to `files`) and `verified`, which can't be renamed or deleted; you can add your own fields. Password hashes are stored in an internal table, never in `users`.
 
 On the **Authentication** page (sidebar → System) you activate the sign-in methods:
 
-- **Username & password**, optionally with self sign-up. Set a user's password in the `users` collection.
+- **Email & password**, optionally with self sign-up and **Require a verified email**: then new users can only sign in after following the link in the verification email (sign-in answers `403` with `code: "email_not_verified"` until then). Set a user's password in the `users` collection.
 - **OAuth**: Google, GitHub, Microsoft, Discord and Twitch. Create an OAuth app at the provider, register the **callback URL** shown in the setup dialog, then enter the client ID and secret.
 
 ### Mail
 
-Verification and password reset emails need mail settings (**Settings → Mail**), with a test button to check them:
+Verification and password reset emails need mail settings (**Mail → Sending**), with a test button to check them:
 
 - **Cloudflare Email Service**: uses the app's own `CLOUDFLARE_API_TOKEN`, which then also needs **Email Sending: Edit**. Onboard the sender's domain under Email Service → Email Sending first. Pouchbase uses the REST API here, on every runtime: the Email Service SMTP endpoint (`smtp.mx.cloudflare.net`) is on Cloudflare's own IP ranges, which Workers can't open sockets to.
 - **SMTP server**: any provider, with TLS (port 465), STARTTLS (587) or no encryption. Workers can't connect to port 25.
 
-With mail set up, a sign-up with an email address sends a verification email. The links open pages of Pouchbase itself (`/account/verify-email`, `/account/reset-password`); reset links are valid for 30 minutes and work once, verification links for 3 days. Both emails can be changed under **System → Mail** (see [Email templates](#email-templates)).
+With mail set up, every sign-up sends a verification email. The links open pages of Pouchbase itself (`/account/verify-email`, `/account/reset-password`); reset links are valid for 30 minutes and work once, verification links for 3 days. Both emails can be changed under **System → Mail** (see [Email templates](#email-templates)).
 
 ### Public API
 
-Every sign-in returns `{ token, user_id }`. Send the token as `Authorization: Bearer <token>`; it is a JWT (HS256), valid for 7 days. The API can be called from any origin.
+Every sign-in returns `{ token, user_id }`; a sign-up returns `{ token, user_id, verification_required }`, with `token: null` when a verified email is required. Send the token as `Authorization: Bearer <token>`; it is a JWT (HS256), valid for 7 days. The API can be called from any origin.
 
-| Request                                               | Purpose                                                                        |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `GET /api/auth/providers`                             | Active OAuth providers: `[{ "provider": "github", "label": "GitHub" }]`        |
-| `POST /api/auth/password/sign-up`                     | `{ username, password, email?, name? }`; `400`/`409` with `issues` per field   |
-| `POST /api/auth/password/sign-in`                     | `{ identity, password }` (username or email); `401` for wrong credentials      |
-| `POST /api/auth/password/request-reset`               | `{ email }`; emails a reset link (same answer for unknown addresses)           |
-| `POST /api/auth/password/confirm-reset`               | `{ token, password }`; `400` for an invalid or expired link                    |
-| `POST /api/auth/verification/request`                 | `{ email }`; emails a verification link                                        |
-| `POST /api/auth/verification/confirm`                 | `{ token }`; marks the user as `verified`                                      |
-| `GET /api/auth/oauth2/<provider>?state=…&challenge=…` | Opened in a popup; starts an OAuth sign-in                                     |
-| `POST /api/auth/oauth2/result`                        | `{ state, verifier }`: `202` while pending, then the result once               |
-| `GET /api/auth/me`                                    | The signed-in user, or `401`                                                   |
-| `GET /api/collections/<name>/records`                 | Records the list rule allows; `?page`, `perPage`, `sort`, `filter`             |
-| `GET /api/collections/<name>/records/<id>`            | One record, when the view rule allows it                                       |
-| `POST /api/collections/<name>/records`                | `{ <field>: value }`; creates a record when the create rule allows it          |
-| `PATCH /api/collections/<name>/records/<id>`          | Changes the given fields, when the update rule allows it                       |
-| `DELETE /api/collections/<name>/records/<id>`         | Deletes a record when the delete rule allows it; `204`                         |
-| `GET /api/realtime?collection=<name>` (WebSocket)     | Live changes to records the view rule allows, see [Realtime](#realtime)        |
-| `GET /api/files/<id>`                                 | A file from the `files` collection (public; ids are random)                    |
-| `GET /api/types?token=…`                              | TypeScript types of every collection; the URL is on the **Types** page         |
-| `<any method> /api/functions/<name>/<path>`           | Calls a [function](#functions); `401` when it requires sign-in, `404` if none  |
-| `POST /api/mail/send`                                 | Sends an [email template](#email-templates); needs an API key (`Bearer pbk_…`) |
-| `GET /api/collections`                                | Every collection with its fields, indexes, API rules and settings; see below   |
-| `GET` / `PATCH` / `DELETE /api/collections/<name>`    | One collection; `PATCH` changes the given parts, `DELETE` answers `204`        |
-| `POST /api/collections`                               | `{ name, fields?, indexes?, rules?, thumbnails? }`; `201` with the collection  |
-| `GET /api/collections/export?collections=a,b`         | An export file of the collections (all without `collections`), no records      |
-| `POST /api/collections/import`                        | Imports an export file; `?dryRun`, `?removeMissing`, `?force`                  |
+| Request                                               | Purpose                                                                                                            |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/auth/providers`                             | Active OAuth providers: `[{ "provider": "github", "label": "GitHub" }]`                                            |
+| `POST /api/auth/password/sign-up`                     | `{ name, email, password }`; `400`/`409` with `issues` per field, `503` without mail when verification is required |
+| `POST /api/auth/password/sign-in`                     | `{ email, password }`; `401` for wrong credentials, `403` until the email is verified (when required)              |
+| `POST /api/auth/password/request-reset`               | `{ email }`; emails a reset link (same answer for unknown addresses)                                               |
+| `POST /api/auth/password/confirm-reset`               | `{ token, password }`; `400` for an invalid or expired link                                                        |
+| `POST /api/auth/verification/request`                 | `{ email }`; emails a verification link                                                                            |
+| `POST /api/auth/verification/confirm`                 | `{ token }`; marks the user as `verified`                                                                          |
+| `GET /api/auth/oauth2/<provider>?state=…&challenge=…` | Opened in a popup; starts an OAuth sign-in                                                                         |
+| `POST /api/auth/oauth2/result`                        | `{ state, verifier }`: `202` while pending, then the result once                                                   |
+| `GET /api/auth/me`                                    | The signed-in user, or `401`                                                                                       |
+| `GET /api/collections/<name>/records`                 | Records the list rule allows; `?page`, `perPage`, `sort`, `filter`                                                 |
+| `GET /api/collections/<name>/records/<id>`            | One record, when the view rule allows it                                                                           |
+| `POST /api/collections/<name>/records`                | `{ <field>: value }`; creates a record when the create rule allows it                                              |
+| `PATCH /api/collections/<name>/records/<id>`          | Changes the given fields, when the update rule allows it                                                           |
+| `DELETE /api/collections/<name>/records/<id>`         | Deletes a record when the delete rule allows it; `204`                                                             |
+| `GET /api/realtime?collection=<name>` (WebSocket)     | Live changes to records the view rule allows, see [Realtime](#realtime)                                            |
+| `GET /api/files/<id>`                                 | A file from the `files` collection (public; ids are random)                                                        |
+| `GET /api/types?token=…`                              | TypeScript types of every collection; the URL is on the **Types** page                                             |
+| `<any method> /api/functions/<name>/<path>`           | Calls a [function](#functions); `401` when it requires sign-in, `404` if none                                      |
+| `POST /api/mail/send`                                 | Sends an [email template](#email-templates); needs an API key (`Bearer pbk_…`)                                     |
+| `GET /api/collections`                                | Every collection with its fields, indexes, API rules and settings; see below                                       |
+| `GET` / `PATCH` / `DELETE /api/collections/<name>`    | One collection; `PATCH` changes the given parts, `DELETE` answers `204`                                            |
+| `POST /api/collections`                               | `{ name, fields?, indexes?, rules?, thumbnails? }`; `201` with the collection                                      |
+| `GET /api/collections/export?collections=a,b`         | An export file of the collections (all without `collections`), no records                                          |
+| `POST /api/collections/import`                        | Imports an export file; `?dryRun`, `?removeMissing`, `?force`                                                      |
 
 ### Collections API, export and import
 

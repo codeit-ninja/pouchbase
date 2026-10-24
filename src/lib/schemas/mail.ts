@@ -7,7 +7,7 @@ export type MailProvider = (typeof MAIL_PROVIDERS)[number];
 
 const email = z.string().trim().toLowerCase().pipe(z.email('Invalid email address'));
 
-/** Mail settings (Settings page). */
+/** Mail settings (Mail page). */
 export const mailSettingsSchema = z
 	.object({
 		provider: z.enum(MAIL_PROVIDERS).default('none'),
@@ -34,7 +34,7 @@ export const mailSettingsSchema = z
 		}
 	});
 
-/** Sends a test email (Settings page). */
+/** Sends a test email (Mail page). */
 export const testMailSchema = z.object({
 	to: email
 });

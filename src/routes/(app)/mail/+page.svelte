@@ -11,6 +11,7 @@
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
 	import CreateTemplateDialog from './create-template-dialog.svelte';
+	import MailSettings from './mail-settings.svelte';
 	import { getMailSender, getMailTemplates } from './mail.remote';
 
 	const [templates, sender] = $derived(await Promise.all([getMailTemplates(), getMailSender()]));
@@ -54,8 +55,8 @@
 				<Callout.Icon><Icon.Root icon="lucide:circle-alert" /></Callout.Icon>
 				<Callout.Body>
 					<Callout.Description>
-						Sending email isn't set up yet. Choose a provider and a sender address in the
-						<Link.Root href={resolve('/(app)/settings')}>settings</Link.Root> to send templates.
+						Sending email isn't set up yet. Choose a provider and a sender address under
+						<Link.Root href="#sending">Sending</Link.Root> to send templates.
 					</Callout.Description>
 				</Callout.Body>
 			</Callout.Root>
@@ -101,5 +102,9 @@
 				{/each}
 			</Table.Body>
 		</Table.Root>
+
+		<div id="sending" class="flex flex-col gap-4">
+			<MailSettings />
+		</div>
 	</div>
 </Page.Root>

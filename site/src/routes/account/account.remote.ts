@@ -9,7 +9,8 @@ import {
 	publishTokenSchema,
 	signInSchema,
 	signUpSchema,
-	uploadBundleSchema
+	uploadBundleSchema,
+	verificationSchema
 } from '#lib/schemas/account.js';
 import { pouchbase } from '#lib/server/pouchbase.js';
 import {
@@ -39,7 +40,7 @@ async function signedIn() {
 export const getUser = query(async () => {
 	const user = await currentUser();
 
-	return user ? { id: user.id, username: String(user.username ?? ''), email: user.email } : null;
+	return user ? { id: user.id, name: String(user.name ?? ''), email: user.email } : null;
 });
 
 /** OAuth providers enabled on the instance, for the sign-in buttons. */
@@ -55,12 +56,17 @@ export const signIn = form(signInSchema, async (data) => {
 	const { cookies } = getRequestEvent();
 
 	try {
-		const { token } = await pouchbase().auth.signIn(data.identity, data._password);
+		const { token } = await pouchbase().auth.signIn(data.email, data._password);
 
 		startSession(cookies, token);
 	} catch (cause) {
 		if (isPouchbaseError(cause) && cause.status === 401) {
-			invalid('Wrong username, email or password');
+			invalid('Wrong email or password');
+		}
+
+		// The page then offers to send the verification email again.
+		if (isPouchbaseError(cause) && cause.code === 'email_not_verified') {
+			return { unverified: true, email: data.email.toLowerCase() };
 		}
 
 		if (isPouchbaseError(cause) && cause.status === 403) {
@@ -73,23 +79,31 @@ export const signIn = form(signInSchema, async (data) => {
 	redirect(303, safeRedirect(data.redirectTo));
 });
 
+/**
+ * Creates an account. The instance requires a verified email, so there is no session yet: the
+ * page asks to follow the link in the verification email and then sign in.
+ */
 export const signUp = form(signUpSchema, async (data, issue) => {
 	const { cookies } = getRequestEvent();
 
 	try {
-		const { token } = await pouchbase().auth.signUp({
-			username: data.username,
+		const result = await pouchbase().auth.signUp({
+			name: data.name,
 			email: data.email,
 			password: data._password
 		});
 
-		startSession(cookies, token);
+		if (result.verificationRequired) {
+			return { verify: true, email: data.email };
+		}
+
+		startSession(cookies, result.token);
 	} catch (cause) {
 		if (isPouchbaseError(cause) && (cause.status === 400 || cause.status === 409)) {
 			const issues = cause.issues;
 
 			invalid(
-				...(issues.username ? [issue.username(issues.username)] : []),
+				...(issues.name ? [issue.name(issues.name)] : []),
 				...(issues.email ? [issue.email(issues.email)] : []),
 				...(issues.password ? [issue._password(issues.password)] : []),
 				...(Object.keys(issues).length ? [] : [cause.message])
@@ -104,6 +118,17 @@ export const signUp = form(signUpSchema, async (data, issue) => {
 	}
 
 	redirect(303, '/account');
+});
+
+/** Sends the verification email again; answers the same whether or not the address has an account. */
+export const resendVerification = form(verificationSchema, async (data) => {
+	try {
+		await pouchbase().auth.requestVerification(data.email);
+	} catch {
+		error(502, 'Could not send the email, try again later');
+	}
+
+	return { sent: true };
 });
 
 /** Starts a session with the token of an OAuth sign-in in the browser, after the instance checked it. */

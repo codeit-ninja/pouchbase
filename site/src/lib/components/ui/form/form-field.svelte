@@ -3,7 +3,7 @@
 	import { setFieldContext, type AnyRemoteFormField } from './form-context';
 
 	type Props = HTMLAttributes<HTMLDivElement> & {
-		/** Field of a remote form, e.g. `myForm.fields.username`. */
+		/** Field of a remote form, e.g. `myForm.fields.email`. */
 		field: AnyRemoteFormField;
 		/** `horizontal` puts the control next to its label, e.g. for checkboxes. */
 		orientation?: 'vertical' | 'horizontal';

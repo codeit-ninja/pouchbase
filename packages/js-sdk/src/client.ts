@@ -146,6 +146,7 @@ export class Pouchbase<C extends object = DefaultCollections> {
 		if (!response.ok) {
 			const body = (data && typeof data === 'object' ? data : {}) as {
 				message?: unknown;
+				code?: unknown;
 				issues?: unknown;
 			};
 
@@ -153,6 +154,7 @@ export class Pouchbase<C extends object = DefaultCollections> {
 				typeof body.message === 'string' ? body.message : `Request failed (${response.status})`,
 				{
 					status: response.status,
+					code: typeof body.code === 'string' ? body.code : undefined,
 					issues: isIssues(body.issues) ? body.issues : {},
 					data
 				}

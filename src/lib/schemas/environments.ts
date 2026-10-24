@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { OAUTH_PROVIDER_IDS } from '#lib/auth/oauth-providers.js';
 import {
+	ENVIRONMENTS,
 	SNAPSHOT_FORMAT,
 	SNAPSHOT_SECRET_KEYS,
 	SNAPSHOT_SETTING_KEYS
@@ -133,6 +134,12 @@ export type SnapshotOAuthProvider = z.infer<typeof snapshotOAuthProviderSchema>;
 
 export const deployTokenSchema = z.object({
 	name: z.string().trim().min(1, 'Enter a name').max(64, 'Name must be at most 64 characters')
+});
+
+/** Whether this instance is for development or production. */
+export const environmentSchema = z.object({
+	/** `none` when the instance doesn't use environments. */
+	environment: z.enum(['none', ...ENVIRONMENTS]).default('none')
 });
 
 export const deployTokenIdSchema = z.object({ id: z.string().min(1) });
