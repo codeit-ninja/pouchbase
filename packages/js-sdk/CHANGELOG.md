@@ -1,5 +1,13 @@
 # @pouchbasejs/js-sdk
 
+## 0.6.0
+
+### Minor Changes
+
+- [`beca993`](https://github.com/pouchbase/pouchbase/commit/beca9932da720984cd97cbe52ade9b0ee323c65c) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Add the `onDelete` option of relation fields (`set_null`, `cascade` or `restrict`) to `FieldOptions`
+
+- [`3096c45`](https://github.com/pouchbase/pouchbase/commit/3096c457493558e9cd2df9fdad8f4d92b4e1e35e) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - `OAuthProvider` accepts any provider id, since sign-in providers now come from plugins, and `pb.auth.providers()` returns each provider's `iconUrl`. The built-in ids are `KNOWN_OAUTH_PROVIDERS` (`OAUTH_PROVIDERS` is deprecated).
+
 ## 0.5.0
 
 ### Minor Changes
