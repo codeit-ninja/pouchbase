@@ -65,6 +65,9 @@ export const prepareWorkerUpdate = command(async () => {
 		error(500, result.error.message);
 	}
 
+	// Preparing looked up the latest release again, which may be newer than the dialog shows.
+	void getUpdateStatus().refresh();
+
 	return result.value;
 });
 

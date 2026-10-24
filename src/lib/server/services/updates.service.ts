@@ -102,9 +102,13 @@ export class UpdatesService extends Service {
 			}));
 	}
 
-	/** The version to install: the latest release, when it is newer than this one. */
-	private target(): ResultAsync<string, StatusFailed | NoUpdate> {
-		return this.status().andThen((status) =>
+	/**
+	 * The version to install: the latest release, when it is newer than this one. With `refresh`,
+	 * GitHub is asked again instead of using the answer of the last six hours, which may name a
+	 * release that has been superseded since.
+	 */
+	private target({ refresh = false } = {}): ResultAsync<string, StatusFailed | NoUpdate> {
+		return this.status({ refresh }).andThen((status) =>
 			status.available && status.latest
 				? okAsync(status.latest.version)
 				: errAsync(this.error(21002, 'NO_UPDATE_AVAILABLE'))
@@ -121,14 +125,15 @@ export class UpdatesService extends Service {
 	 * Starts updating the Worker to the latest release: registers its assets with Cloudflare. The
 	 * dialog then uploads the hashes in `buckets` (`uploadWorkerAssets`), one request per bucket, and
 	 * deploys with the completion token (`deployWorker`). When `buckets` is empty, `jwt` is the
-	 * completion token already.
+	 * completion token already. The latest release is looked up again first, so `deployWorker`
+	 * installs the same version from the refreshed check.
 	 */
 	prepareWorker(): ResultAsync<
 		{ version: string; jwt: string; buckets: string[][] },
 		NotSupported | StatusFailed | NoUpdate | PrepareFailed
 	> {
 		return this.requireRuntime('workers')
-			.andThen(() => this.target())
+			.andThen(() => this.target({ refresh: true }))
 			.andThen((version) =>
 				fromPromise(
 					(async () => {
