@@ -10,28 +10,56 @@ import type {
 import { watch } from 'node:fs';
 import { createServer, type ServerResponse } from 'node:http';
 
-import { computeIntegrity } from '../bundle.js';
+import { computeIntegrity, serializeBundle } from '../bundle.js';
+import { effectiveCategories } from '../categories.js';
 import { REGISTRY_API_PREFIX } from '../registry.js';
 import { buildBundle } from './project.js';
-import { printError } from './output.js';
+import { printError, printWarnings } from './output.js';
 
 /**
  * A local registry that serves the plugin being developed, so a Pouchbase started with
  * `PLUGIN_REGISTRY_URL=http://localhost:<port>` can find and install it. Rebuilds on every change;
  * when a build fails, the last good one stays available.
+ *
+ * Every build is served as a new prerelease, `<version>-dev.<n>`, so Pouchbase sees it as an
+ * update of the one it installed; `exactVersion` serves the version from the manifest instead.
  */
 
 type Build = { bundle: PluginBundle; bytes: Uint8Array<ArrayBuffer>; integrity: string; at: Date };
 
 const IGNORED = /(?:^|[\\/])(?:node_modules|dist|\.git)(?:[\\/]|$)/;
 
-export async function startDevServer(root: string, port: number) {
+/** The bundle with its version turned into `<version>-dev.<n>`; `1.0.0-beta.1` → `1.0.0-beta.1-dev.<n>`. */
+export function withDevVersion(
+	bundle: PluginBundle,
+	n: number
+): { bundle: PluginBundle; bytes: Uint8Array<ArrayBuffer> } {
+	const dev = {
+		...bundle,
+		manifest: { ...bundle.manifest, version: `${bundle.manifest.version}-dev.${n}` }
+	};
+
+	return { bundle: dev, bytes: serializeBundle(dev) };
+}
+
+export async function startDevServer(
+	root: string,
+	port: number,
+	{ exactVersion = false }: { exactVersion?: boolean } = {}
+) {
 	const base = `http://localhost:${port}`;
 	let current: Build | null = null;
+	let builds = 0;
 
 	async function rebuild() {
 		try {
-			const { bundle, bytes } = await buildBundle(root);
+			const built = await buildBundle(root);
+
+			printWarnings(built.warnings);
+
+			const { bundle, bytes } = exactVersion ? built : withDevVersion(built.bundle, builds + 1);
+
+			builds += 1;
 			current = { bundle, bytes, integrity: await computeIntegrity(bytes), at: new Date() };
 			console.log(
 				`✓ Built ${bundle.manifest.id}@${bundle.manifest.version} (${Math.ceil(bytes.byteLength / 1024)} KiB)`
@@ -68,6 +96,7 @@ export async function startDevServer(root: string, port: number) {
 			author: manifest.author?.name ?? null,
 			iconUrl: null,
 			keywords: manifest.keywords,
+			categories: effectiveCategories(manifest),
 			downloads: 0,
 			verified: false,
 			updatedAt: build.at.toISOString()
@@ -119,9 +148,11 @@ export async function startDevServer(root: string, port: number) {
 
 		if (parts.length === 1) {
 			const query = url.searchParams.get('q')?.toLowerCase() ?? '';
+			const category = url.searchParams.get('category');
 			const items =
 				build &&
-				`${build.bundle.manifest.id} ${build.bundle.manifest.name}`.toLowerCase().includes(query)
+				`${build.bundle.manifest.id} ${build.bundle.manifest.name}`.toLowerCase().includes(query) &&
+				(!category || effectiveCategories(build.bundle.manifest).includes(category))
 					? [summary(build)]
 					: [];
 
@@ -178,8 +209,11 @@ export async function startDevServer(root: string, port: number) {
 
 	server.listen(port, () => {
 		console.log(`\nDev registry on ${base}`);
+		console.log(`Start Pouchbase with PLUGIN_REGISTRY_URL=${base} to install the plugin from it.`);
 		console.log(
-			`Start Pouchbase with PLUGIN_REGISTRY_URL=${base} to install the plugin from it.\n`
+			exactVersion
+				? 'Serving the version from the manifest.\n'
+				: 'Every build is served as <version>-dev.<n>; --exact-version serves the version as is.\n'
 		);
 	});
 }

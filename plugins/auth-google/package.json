@@ -1,0 +1,32 @@
+{
+	"name": "@pouchbase-plugins/auth-google",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Sign in with Google.",
+	"license": "MIT",
+	"author": "Pouchbase (https://pouchbase.io)",
+	"homepage": "https://github.com/pouchbase/pouchbase/tree/main/plugins/auth-google",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/pouchbase/pouchbase.git",
+		"directory": "plugins/auth-google"
+	},
+	"keywords": [
+		"oauth",
+		"sign-in",
+		"google"
+	],
+	"type": "module",
+	"scripts": {
+		"check": "tsc --noEmit",
+		"test": "vitest run",
+		"validate": "pouchbase-plugin validate",
+		"build": "pouchbase-plugin build",
+		"release": "pouchbase-plugin publish"
+	},
+	"devDependencies": {
+		"@pouchbasejs/plugin-sdk": "workspace:*",
+		"typescript": "^6.0.3",
+		"vitest": "^5.0.5"
+	}
+}

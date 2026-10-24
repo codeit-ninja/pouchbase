@@ -284,9 +284,39 @@ export const plugins = sqliteTable('plugins', {
 	integrity: text('integrity').notNull(),
 	/** The registry it was installed from, for updates. */
 	registryUrl: text('registry_url').notNull(),
+	/**
+	 * The workers.dev URL of the plugin's own Worker, which runs its server code; `null` for a
+	 * plugin without server code.
+	 */
+	workerUrl: text('worker_url'),
+	/** Shared with the plugin's Worker, which only answers requests that carry it. */
+	workerSecret: text('worker_secret'),
 	installedAt: integer('installed_at', { mode: 'timestamp_ms' })
 		.notNull()
 		.$defaultFn(() => new Date()),
+	updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+		.notNull()
+		.$defaultFn(() => new Date())
+});
+
+/**
+ * Sign-in providers that plugins contribute (installed and built-in ones), with what the host
+ * needs for the authorize redirect and the token exchange. The plugin reports the URLs, scopes
+ * and PKCE when it is installed; only the profile lookup runs in the plugin. Provider ids are
+ * global: one plugin per provider.
+ */
+export const pluginAuthProviders = sqliteTable('plugin_auth_providers', {
+	/** The public provider id, e.g. `google`; also `oauth_providers.provider`. */
+	provider: text('provider').primaryKey(),
+	pluginId: text('plugin_id').notNull(),
+	label: text('label').notNull(),
+	consoleUrl: text('console_url'),
+	/** Path of the logo in the plugin, e.g. `ui/google.svg`. */
+	icon: text('icon'),
+	authorizeUrl: text('authorize_url').notNull(),
+	tokenUrl: text('token_url').notNull(),
+	scopes: text('scopes', { mode: 'json' }).$type<string[]>().notNull(),
+	pkce: integer('pkce', { mode: 'boolean' }).notNull(),
 	updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
 		.notNull()
 		.$defaultFn(() => new Date())

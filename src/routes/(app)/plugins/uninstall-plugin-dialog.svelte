@@ -16,7 +16,11 @@
 	<Dialog.Header>
 		<Dialog.Title>Remove {plugin.name}</Dialog.Title>
 		<Dialog.Description>
-			This removes the plugin from Pouchbase. You can install it again from the marketplace.
+			This removes the plugin and its Worker from Pouchbase. You can install it again from the
+			marketplace.
+			{#if plugin.replacesBuiltIn}
+				The built-in version of this plugin takes its place again.
+			{/if}
 		</Dialog.Description>
 	</Dialog.Header>
 

@@ -5,6 +5,9 @@ import type { FilesService } from './files.service';
 import type { CreateFieldInput, FieldsService } from './fields.service';
 import type { MailTemplatesService } from './mail-templates.service';
 import type { OAuthProvider } from '#lib/auth/oauth-providers.js';
+import type { OAuthCredentials } from '../oauth';
+import type { OAuthProviderDetails } from '../oauth-settings';
+import type { OAuthProfile } from '@pouchbasejs/plugin-sdk/server';
 import type { Result } from 'neverthrow';
 
 import { eq, lt, type SQL } from 'drizzle-orm';
@@ -22,6 +25,7 @@ import { batchDatabase, queryDatabase, queryObjects } from '../db/query';
 import { generateRecordId, generateToken, hashPassword, verifyPassword } from '../crypto';
 import { fields, oauthRequests } from '../db';
 import { authorizationUrl, exchangeCode, randomToken } from '../oauth';
+import { parseProfile } from '../plugins/runtime';
 import { Service } from './base.service';
 import { inBackground } from './realtime.service';
 
@@ -102,6 +106,9 @@ export type PasswordSignUpResult = { token: string | null; userId: string };
 
 /** Validation messages keyed by input field. */
 export type AuthIssues = Record<string, string>;
+
+/** The plugin of the provider failed to load the user's profile, or answered nonsense. */
+type ProfileFailed = ServiceError<11015, 'PROVIDER_PLUGIN_FAILED'> & { data: { reason: string } };
 
 type InvalidInputError = ServiceError<11025, 'INVALID_INPUT'> & { data: { issues: AuthIssues } };
 
@@ -474,6 +481,7 @@ export class AuthService extends Service {
 		| ServiceError<11001, 'PROVIDER_NOT_ENABLED'>
 		| ServiceError<11010, 'INVALID_OAUTH_REQUEST'>
 		| ServiceError<11013, 'OAUTH_REQUEST_FAILED'>
+		| ServiceError<11014, 'PROVIDER_NOT_FOUND'>
 	> {
 		if (!CLIENT_STATE.test(clientState) || !CLIENT_CHALLENGE.test(clientChallenge)) {
 			return errAsync(this.error(11010, 'INVALID_OAUTH_REQUEST'));
@@ -482,7 +490,7 @@ export class AuthService extends Service {
 		const id = randomToken();
 		const providerVerifier = randomToken();
 
-		return this.enabledCredentials(provider).andThen((credentials) =>
+		return this.enabledProvider(provider).andThen(({ details, credentials }) =>
 			fromPromise(
 				(async () => {
 					// Clean up abandoned sign-ins on the way.
@@ -506,7 +514,9 @@ export class AuthService extends Service {
 						expiresAt: new Date(Date.now() + OAUTH_REQUEST_TTL)
 					});
 
-					return (await authorizationUrl(provider, credentials, id, providerVerifier)).toString();
+					return (
+						await authorizationUrl(details.config, credentials, id, providerVerifier)
+					).toString();
 				})(),
 				(error) => this.error(11013, 'OAUTH_REQUEST_FAILED', error)
 			).andThen((url) =>
@@ -539,11 +549,15 @@ export class AuthService extends Service {
 				{ token: string; userId: string } | { error: OAuthErrorCode },
 				never
 			> = code
-				? this.signIn(provider, code, request.providerVerifier).orElse((failure) =>
-						okAsync({
+				? this.signIn(provider, code, request.providerVerifier).orElse((failure) => {
+						if (failure.code !== 11005) {
+							console.error(`[auth] Sign-in with ${provider} failed`, failure);
+						}
+
+						return okAsync({
 							error: failure.code === 11005 ? 'email_in_use' : 'sign_in_failed'
-						} as const)
-					)
+						} as const);
+					})
 				: okAsync({
 						error: providerError === 'access_denied' ? 'access_denied' : 'sign_in_failed'
 					} as const);
@@ -641,12 +655,15 @@ export class AuthService extends Service {
 		| ServiceError<11003, 'OAUTH_FAILED'>
 		| ServiceError<11004, 'SIGN_IN_FAILED'>
 		| ServiceError<11005, 'EMAIL_IN_USE'>
+		| ServiceError<11014, 'PROVIDER_NOT_FOUND'>
+		| ProfileFailed
+		| ServiceError<19001, 'LIST_PLUGINS_FAILED'>
 	> {
-		return this.enabledCredentials(provider)
-			.andThen((credentials) =>
-				fromPromise(exchangeCode(provider, credentials, code, codeVerifier), (error) =>
+		return this.enabledProvider(provider)
+			.andThen(({ details, credentials }) =>
+				fromPromise(exchangeCode(details.config, credentials, code, codeVerifier), (error) =>
 					this.error(11003, 'OAUTH_FAILED', error)
-				)
+				).andThen((accessToken) => this.loadProfile(details, credentials, accessToken))
 			)
 			.andThen((profile) =>
 				this.ensureUsersCollection()
@@ -1091,19 +1108,68 @@ export class AuthService extends Service {
 		).map(([request]) => (request && request.expiresAt > new Date() ? request : null));
 	}
 
-	private enabledCredentials(provider: OAuthProvider) {
+	/** The provider's plugin and OAuth config, with the credentials, when it can be used. */
+	private enabledProvider(
+		provider: OAuthProvider
+	): ResultAsync<
+		{ details: OAuthProviderDetails; credentials: OAuthCredentials },
+		| ServiceError<10001, 'GET_PROVIDER_FAILED'>
+		| ServiceError<11001, 'PROVIDER_NOT_ENABLED'>
+		| ServiceError<11014, 'PROVIDER_NOT_FOUND'>
+	> {
 		return this.services
 			.oauthProviders()
-			.credentials(provider)
-			.andThen((credentials) =>
-				credentials?.enabled && credentials.clientId && credentials.clientSecret
+			.find(provider)
+			.andThen((details) => {
+				if (!details) {
+					return errAsync(this.error(11014, 'PROVIDER_NOT_FOUND'));
+				}
+
+				const { enabled, clientId, clientSecret } = details.credentials;
+
+				return enabled && clientId && clientSecret
 					? okAsync({
-							clientId: credentials.clientId,
-							clientSecret: credentials.clientSecret,
-							redirectUri: this.callbackUrl(provider)
+							details,
+							credentials: { clientId, clientSecret, redirectUri: this.callbackUrl(provider) }
 						})
-					: errAsync(this.error(11001, 'PROVIDER_NOT_ENABLED'))
-			);
+					: errAsync(this.error(11001, 'PROVIDER_NOT_ENABLED'));
+			});
+	}
+
+	/** Asks the provider's plugin for the user behind the access token, and checks the answer. */
+	private loadProfile(
+		details: OAuthProviderDetails,
+		credentials: OAuthCredentials,
+		accessToken: string
+	): ResultAsync<OAuthProfile, ProfileFailed | ServiceError<19001, 'LIST_PLUGINS_FAILED'>> {
+		return this.services
+			.plugins()
+			.runtimeFor(details.pluginId)
+			.andThen((runtime) => {
+				if (!runtime) {
+					return errAsync({
+						...this.error(11015, 'PROVIDER_PLUGIN_FAILED'),
+						data: { reason: `The plugin ${details.pluginId} has no server code` }
+					} satisfies ProfileFailed);
+				}
+
+				return fromPromise(
+					runtime
+						.call({
+							type: 'profile',
+							provider: details.provider,
+							accessToken,
+							credentials: { clientId: credentials.clientId }
+						})
+						.then(parseProfile),
+					(error): ProfileFailed => ({
+						...this.error(11015, 'PROVIDER_PLUGIN_FAILED', error),
+						data: {
+							reason: error instanceof Error ? error.message : String(error)
+						}
+					})
+				);
+			});
 	}
 
 	private signToken(

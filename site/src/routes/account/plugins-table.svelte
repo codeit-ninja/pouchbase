@@ -3,6 +3,7 @@
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Icon from '#lib/components/ui/icon/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
+	import { categoryLabel } from '#lib/plugin-categories.js';
 	import { getMyPlugins } from './account.remote';
 
 	const plugins = $derived(await getMyPlugins());
@@ -32,6 +33,13 @@
 								{/if}
 							</span>
 							<span class="font-mono text-xs text-zinc-500">{plugin.slug}</span>
+							{#if plugin.categories.length}
+								<span class="mt-1 flex flex-wrap gap-1">
+									{#each plugin.categories as category (category)}
+										<Badge.Root variant="outline">{categoryLabel(category)}</Badge.Root>
+									{/each}
+								</span>
+							{/if}
 						</span>
 					</Table.Cell>
 					<Table.Cell class="font-mono text-xs">{plugin.version}</Table.Cell>

@@ -36,18 +36,19 @@ The site is also the public plugin registry (the API in `@pouchbasejs/plugin-sdk
 | `POST /v1/plugins/:id/versions`          | Publishes a bundle with a publish token (`pbp_…`) or a user's token  |
 | `/account/sign-in`, `/account/sign-up`   | Password or OAuth (GitHub) sign-in on the instance                   |
 | `/account`                               | Your plugins, uploading a bundle and publish tokens for the CLI      |
+| `/plugins`                               | The public plugin directory: search and filter by category           |
 
-The first version of a plugin makes the uploader its owner; only they can publish more. Plugins are listed right away; set `verified` on a plugin in the Pouchbase dashboard after reviewing it.
+The first version of a plugin makes the uploader its owner; only they can publish more. Plugins are listed right away; set `verified` on a plugin in the Pouchbase dashboard after reviewing it. A plugin's `categories` (and `categories_text`, the same list as `,auth,fields,` for filtering) come from its newest version: the manifest's `categories`, or else the ones implied by what it contributes.
 
 ### Setting up the instance
 
 1. Create these collections (all API rules **Admins only**):
 
-   | Collection        | Fields                                                                                                                                                                                                                                                                                          | Unique index        |
-   | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-   | `plugins`         | `slug` text, `name` text, `description` text, `owner` relation to `users`, `author` text, `license` text, `homepage` URL, `repository` URL, `readme` text, `icon_url` URL, `keywords` JSON, `version` text, `api_version` integer, `api_versions` text, `downloads` integer, `verified` boolean | `slug`              |
-   | `plugin_versions` | `plugin` relation to `plugins`, `version` text, `api_version` integer, `integrity` text, `size` integer, `pouchbase` text, `permissions` JSON, `bundle` text                                                                                                                                    | `plugin`, `version` |
-   | `publish_tokens`  | `user` relation to `users`, `name` text, `prefix` text, `token_hash` text, `last_used_at` date                                                                                                                                                                                                  | `token_hash`        |
+   | Collection        | Fields                                                                                                                                                                                                                                                                                                                                     | Unique index        |
+   | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+   | `plugins`         | `slug` text, `name` text, `description` text, `owner` relation to `users`, `author` text, `license` text, `homepage` URL, `repository` URL, `readme` text, `icon_url` URL, `keywords` JSON, `categories` JSON, `categories_text` text, `version` text, `api_version` integer, `api_versions` text, `downloads` integer, `verified` boolean | `slug`              |
+   | `plugin_versions` | `plugin` relation to `plugins`, `version` text, `api_version` integer, `integrity` text, `size` integer, `pouchbase` text, `permissions` JSON, `bundle` text                                                                                                                                                                               | `plugin`, `version` |
+   | `publish_tokens`  | `user` relation to `users`, `name` text, `prefix` text, `token_hash` text, `last_used_at` date                                                                                                                                                                                                                                             | `token_hash`        |
 
 2. Set up mail under **Mail**, then under **System → Authentication** turn on email & password with self sign-up and **Require a verified email** (accounts are only active once their email is verified), and GitHub.
 3. Under **System → API keys**, create a key with the **service** scope.

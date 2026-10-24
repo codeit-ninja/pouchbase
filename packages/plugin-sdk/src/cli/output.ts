@@ -1,3 +1,5 @@
+import type { ManifestIssue } from '../manifest.js';
+
 import { RegistryError } from '../registry.js';
 import { ProjectError } from './project.js';
 
@@ -14,4 +16,11 @@ export function printError(error: unknown) {
 	}
 
 	console.error(error instanceof Error ? `✗ ${error.message}` : error);
+}
+
+/** Prints problems that don't stop a build, one per line. */
+export function printWarnings(warnings: readonly ManifestIssue[]) {
+	for (const warning of warnings) {
+		console.warn(`! ${warning.path ? `${warning.path}: ` : ''}${warning.message}`);
+	}
 }

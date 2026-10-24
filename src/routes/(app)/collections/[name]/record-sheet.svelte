@@ -4,7 +4,8 @@
 	import * as Icon from '#lib/components/ui/icon/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
-	import { signInMethodInfo, type SignInMethod } from '#lib/auth/sign-in-methods.js';
+	import * as ProviderIcon from '#lib/components/ui/provider-icon/index.js';
+	import { signInMethodIcon, type SignInMethod } from '#lib/auth/sign-in-methods.js';
 	import { USERS_COLLECTION } from '#lib/auth/users.js';
 	import * as Thumbnail from '#lib/components/ui/thumbnail/index.js';
 	import {
@@ -195,13 +196,15 @@
 							<Table.Root>
 								<Table.Body>
 									{#each signInMethods as method, index (`${method.provider}:${method.providerId ?? index}`)}
-										{@const info = signInMethodInfo(method.provider)}
-
 										<Table.Row>
 											<Table.Cell>
 												<span class="inline-flex items-center gap-2 font-medium text-zinc-900">
-													<Icon.Root icon={info.icon} class="size-4" />
-													{info.label}
+													<ProviderIcon.Root
+														src={method.iconUrl}
+														fallback={signInMethodIcon(method)}
+														class="size-4"
+													/>
+													{method.label}
 												</span>
 											</Table.Cell>
 											<Table.Cell class="font-mono text-xs text-zinc-500">

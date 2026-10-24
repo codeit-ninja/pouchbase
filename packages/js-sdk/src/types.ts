@@ -1,16 +1,35 @@
 /**
- * OAuth providers Pouchbase supports. Mirrors `OAUTH_PROVIDERS` in the app
- * (`src/lib/auth/oauth-providers.ts`); keep both in sync.
+ * The sign-in providers built into Pouchbase (as plugins, `plugins/auth-*` in the app). An
+ * instance can have more: every installed sign-in plugin adds its own, so ask
+ * `pb.auth.providers()` which ones are enabled.
  */
-export const OAUTH_PROVIDERS = ['google', 'github', 'microsoft', 'discord', 'twitch'] as const;
+export const KNOWN_OAUTH_PROVIDERS = [
+	'google',
+	'github',
+	'microsoft',
+	'discord',
+	'twitch'
+] as const;
 
-/** An OAuth provider id, such as `github`. */
-export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
+/** @deprecated Use `KNOWN_OAUTH_PROVIDERS`; instances can have more providers than these. */
+export const OAUTH_PROVIDERS: typeof KNOWN_OAUTH_PROVIDERS = KNOWN_OAUTH_PROVIDERS;
+
+/** One of the built-in provider ids. */
+export type KnownOAuthProvider = (typeof KNOWN_OAUTH_PROVIDERS)[number];
+
+/**
+ * An OAuth provider id, such as `github`: a built-in one or one a plugin adds (any lowercase id
+ * such as `gitlab` or `my-sso`).
+ */
+// `string & {}` keeps the built-in ids as suggestions in editors.
+export type OAuthProvider = KnownOAuthProvider | (string & {});
 
 /** An enabled OAuth provider, as returned by `GET /api/auth/providers`. */
 export type OAuthProviderInfo = {
 	provider: OAuthProvider;
 	label: string;
+	/** Absolute URL of the provider's logo (SVG), for a sign-in button; `null` when it has none. */
+	iconUrl: string | null;
 };
 
 /**

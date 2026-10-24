@@ -322,6 +322,8 @@ export class EnvironmentsService extends Service {
 							secrets: Object.fromEntries(SNAPSHOT_SECRET_KEYS.map((key) => [key, !!values[key]])),
 							oauthProviders: providers.value.map((provider) => ({
 								provider: provider.provider,
+								label: provider.label,
+								pluginId: provider.pluginId,
 								enabled: provider.enabled,
 								clientId: provider.clientId,
 								hasSecret: provider.hasSecret
@@ -1027,6 +1029,12 @@ export class EnvironmentsService extends Service {
 
 			case 'oauth.update': {
 				const current = await this.must(services.oauthProviders().credentials(step.provider));
+
+				// No plugin on this instance contributes the provider (the plan warned about it).
+				if (!current) {
+					console.warn(`[environments] Skipping sign-in with ${step.provider}: no plugin has it`);
+					return;
+				}
 
 				// The secret is never published: without one on this instance, the provider stays off.
 				await this.must(

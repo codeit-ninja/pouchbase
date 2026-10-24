@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as Badge from '#lib/components/ui/badge/index.js';
-	import * as Icon from '#lib/components/ui/icon/index.js';
-	import { signInMethodInfo, type SignInMethod } from '#lib/auth/sign-in-methods.js';
+	import * as ProviderIcon from '#lib/components/ui/provider-icon/index.js';
+	import { signInMethodIcon, type SignInMethod } from '#lib/auth/sign-in-methods.js';
 
 	type Props = {
 		methods: SignInMethod[];
@@ -14,13 +14,11 @@
 {#if methods.length}
 	<span class="flex gap-1">
 		{#each methods as method, index (`${method.provider}:${method.providerId ?? index}`)}
-			{@const info = signInMethodInfo(method.provider)}
-
 			<Badge.Root
-				title={method.providerId ? `${info.label} account ${method.providerId}` : info.label}
+				title={method.providerId ? `${method.label} account ${method.providerId}` : method.label}
 			>
-				<Icon.Root icon={info.icon} />
-				{info.label}
+				<ProviderIcon.Root src={method.iconUrl} fallback={signInMethodIcon(method)} />
+				{method.label}
 			</Badge.Root>
 		{/each}
 	</span>

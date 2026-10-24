@@ -333,6 +333,104 @@ describe('diff', () => {
 			{ kind: 'oauth.secret', provider: 'github' }
 		]);
 	});
+
+	it('carries the provider label of the source', () => {
+		const plan = diff(
+			snapshot({
+				oauthProviders: [
+					{
+						provider: 'github',
+						label: 'GitHub',
+						pluginId: 'auth-github',
+						enabled: false,
+						clientId: 'abc',
+						hasSecret: true
+					}
+				]
+			}),
+			snapshot({
+				oauthProviders: [{ provider: 'github', enabled: false, clientId: '', hasSecret: false }]
+			})
+		);
+
+		expect(plan.steps).toEqual([
+			{
+				kind: 'oauth.update',
+				severity: 'safe',
+				provider: 'github',
+				label: 'GitHub',
+				enabled: false,
+				clientId: 'abc'
+			}
+		]);
+		expect(plan.warnings).toEqual([]);
+	});
+
+	it('leaves out providers the target has no plugin for', () => {
+		const plan = diff(
+			snapshot({
+				oauthProviders: [
+					{
+						provider: 'gitlab',
+						label: 'GitLab',
+						pluginId: 'auth-gitlab',
+						enabled: true,
+						clientId: 'abc',
+						hasSecret: true
+					},
+					// From a snapshot made before providers were plugins.
+					{ provider: 'okta', enabled: true, clientId: 'def', hasSecret: true }
+				]
+			}),
+			snapshot()
+		);
+
+		expect(plan.steps).toEqual([]);
+		expect(plan.warnings).toEqual([
+			{ kind: 'oauth.plugin', provider: 'gitlab', label: 'GitLab', pluginId: 'auth-gitlab' },
+			{ kind: 'oauth.plugin', provider: 'okta' }
+		]);
+	});
+
+	it('sets up a provider whose plugin the plan installs', () => {
+		const plugin = {
+			id: 'auth-gitlab',
+			name: 'GitLab sign-in',
+			version: '1.0.0',
+			apiVersion: 1,
+			integrity: 'sha256-a',
+			registryUrl: 'https://api.pouchbase.io'
+		};
+		const plan = diff(
+			snapshot({
+				plugins: [plugin],
+				oauthProviders: [
+					{
+						provider: 'gitlab',
+						label: 'GitLab',
+						pluginId: 'auth-gitlab',
+						enabled: true,
+						clientId: 'abc',
+						hasSecret: true
+					}
+				]
+			}),
+			snapshot()
+		);
+
+		expect(plan.steps).toEqual([
+			{ kind: 'plugin.install', severity: 'safe', plugin, from: null },
+			{
+				kind: 'oauth.update',
+				severity: 'safe',
+				provider: 'gitlab',
+				label: 'GitLab',
+				enabled: true,
+				clientId: 'abc'
+			}
+		]);
+		expect(plan.warnings).toEqual([{ kind: 'oauth.secret', provider: 'gitlab', label: 'GitLab' }]);
+	});
 });
 
 describe('snapshotHash', () => {

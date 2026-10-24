@@ -10,10 +10,12 @@ import type { Where } from '@pouchbasejs/js-sdk';
 import { isPouchbaseError } from '@pouchbasejs/js-sdk';
 import {
 	computeIntegrity,
+	effectiveCategories,
 	isSupportedApiVersion,
 	parseBundle,
 	REGISTRY_API_PREFIX,
-	serializeBundle
+	serializeBundle,
+	unknownCategoryIssues
 } from '@pouchbasejs/plugin-sdk';
 import semver from 'semver';
 
@@ -79,6 +81,7 @@ function toSummary(plugin: PluginRecord): PluginSummary {
 		author: plugin.author || null,
 		iconUrl: plugin.icon_url || null,
 		keywords: plugin.keywords,
+		categories: plugin.categories ?? [],
 		downloads: plugin.downloads,
 		verified: plugin.verified,
 		updatedAt: iso(plugin.updated_at)
@@ -101,6 +104,11 @@ function toVersion(origin: string, slug: string, row: VersionRow): PluginVersion
 /** API versions as `plugins.api_versions` stores them: `,1,2,`. */
 function apiVersionList(versions: number[]) {
 	return `,${[...new Set(versions)].sort((a, b) => a - b).join(',')},`;
+}
+
+/** Categories as `plugins.categories_text` stores them: `,auth,fields,`. */
+function categoryList(categories: string[]) {
+	return categories.length ? `,${categories.join(',')},` : '';
 }
 
 /** Newest first, by semver. */
@@ -132,6 +140,8 @@ function listVersions(pluginId: string): Promise<VersionRow[]> {
 
 export type SearchInput = {
 	query?: string;
+	/** Only plugins listed under this category. */
+	category?: string;
 	page: number;
 	perPage: number;
 	apiVersions: number[];
@@ -151,6 +161,10 @@ export async function searchPlugins(input: SearchInput): Promise<PluginList> {
 				{ description: { contains: query } }
 			]
 		});
+	}
+
+	if (input.category) {
+		conditions.push({ categories_text: { contains: `,${input.category},` } });
 	}
 
 	if (input.apiVersions.length) {
@@ -294,6 +308,20 @@ export async function publishVersion(
 		);
 	}
 
+	const categoryIssues = unknownCategoryIssues(manifest.categories).map((issue) => ({
+		...issue,
+		path: `manifest.${issue.path}`
+	}));
+
+	if (categoryIssues.length) {
+		throw new RegistryFailure(
+			422,
+			'invalid_bundle',
+			'The bundle has unknown categories',
+			categoryIssues
+		);
+	}
+
 	const existing = await findPlugin(slug);
 
 	if (existing && existing.owner !== userId) {
@@ -316,6 +344,7 @@ export async function publishVersion(
 	const serialized = serializeBundle(parsed.bundle);
 	const bundle = new TextDecoder().decode(serialized);
 	const integrity = await computeIntegrity(serialized);
+	const categories = effectiveCategories(manifest);
 	const metadata = {
 		name: manifest.name,
 		description: manifest.description,
@@ -324,6 +353,8 @@ export async function publishVersion(
 		homepage: manifest.homepage ?? null,
 		repository: manifest.repository ?? null,
 		keywords: manifest.keywords,
+		categories,
+		categories_text: categoryList(categories),
 		version: manifest.version,
 		api_version: manifest.apiVersion
 	};

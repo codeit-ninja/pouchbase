@@ -1,0 +1,24 @@
+{
+	"$schema": "https://pouchbase.io/schemas/plugin-manifest.json",
+	"apiVersion": 1,
+	"id": "auth-twitch",
+	"name": "Twitch sign-in",
+	"categories": ["auth"],
+	"engines": {
+		"pouchbase": ">=0.8.0"
+	},
+	"permissions": {
+		"network": ["api.twitch.tv"]
+	},
+	"server": "server/index.ts",
+	"contributes": {
+		"authProviders": [
+			{
+				"id": "twitch",
+				"label": "Twitch",
+				"consoleUrl": "https://dev.twitch.tv/console/apps",
+				"icon": "ui/twitch.svg"
+			}
+		]
+	}
+}

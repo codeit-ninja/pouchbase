@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { OAUTH_PROVIDER_IDS } from '#lib/auth/oauth-providers.js';
+import { PROVIDER_ID_PATTERN } from '#lib/auth/oauth-providers.js';
 import {
 	ENVIRONMENTS,
 	SNAPSHOT_FORMAT,
@@ -100,7 +100,12 @@ export const snapshotPluginSchema = z.object({
 });
 
 export const snapshotOAuthProviderSchema = z.object({
-	provider: z.enum(OAUTH_PROVIDER_IDS),
+	/** The provider id, e.g. `google`. Any id: the provider comes from a plugin. */
+	provider: z.string().regex(PROVIDER_ID_PATTERN),
+	/** Snapshots before sign-in providers were plugins have neither `label` nor `pluginId`. */
+	label: z.string().optional(),
+	/** The plugin that contributes the provider. */
+	pluginId: z.string().optional(),
 	enabled: z.boolean(),
 	clientId: z.string(),
 	/** Whether a client secret is stored; the secret itself never leaves the instance. */

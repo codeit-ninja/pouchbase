@@ -1,152 +1,98 @@
-import type { PluginManifestInput } from '../manifest.js';
-
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 
-import { API_VERSION } from '../api-version.js';
-import { MANIFEST_FILE, PLUGIN_ID_PATTERN } from '../manifest.js';
+import { PLUGIN_ID_PATTERN } from '../manifest.js';
 import { ProjectError } from './project.js';
+import {
+	TEMPLATES,
+	TEMPLATE_DESCRIPTIONS,
+	isTemplate,
+	projectFiles,
+	type PluginTemplate
+} from './templates.js';
 
-/** `pouchbase-plugin init`: a new plugin with an example field type. */
+/** `pouchbase-plugin init`: a new plugin from one of the templates. */
 
+export const DEFAULT_TEMPLATE: PluginTemplate = 'field';
+
+/** The SDK's own version: `dist/cli.js` sits one level below `package.json`, `src/cli/` two. */
 async function sdkVersion() {
-	const json = await readFile(new URL('../package.json', import.meta.url), 'utf8');
+	for (const path of ['../package.json', '../../package.json']) {
+		try {
+			const json = await readFile(new URL(path, import.meta.url), 'utf8');
+			const pkg = JSON.parse(json) as { name?: string; version?: string };
 
-	return (JSON.parse(json) as { version: string }).version;
-}
-
-function title(id: string) {
-	const words = id.split('-').join(' ');
-
-	return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-function templates(id: string, sdk: string): Record<string, string> {
-	const manifest: PluginManifestInput = {
-		apiVersion: API_VERSION,
-		id,
-		name: title(id),
-		version: '0.1.0',
-		description: 'Adds a color field type.',
-		license: 'MIT',
-		server: 'server/index.ts',
-		contributes: {
-			fields: [
-				{
-					type: 'color',
-					label: 'Color',
-					description: 'A color as a hex code, e.g. #ff6600.',
-					column: 'TEXT',
-					input: 'ui/color-input.svelte',
-					cell: 'ui/color-cell.svelte'
-				}
-			]
-		}
-	};
-
-	return {
-		[MANIFEST_FILE]: JSON.stringify(manifest, null, '\t'),
-		'package.json': JSON.stringify(
-			{
-				name: id,
-				version: '0.1.0',
-				private: true,
-				type: 'module',
-				scripts: {
-					dev: 'pouchbase-plugin dev',
-					build: 'pouchbase-plugin build',
-					release: 'pouchbase-plugin publish'
-				},
-				devDependencies: {
-					'@pouchbasejs/plugin-sdk': `^${sdk}`,
-					svelte: '^5.0.0',
-					typescript: '^6.0.0'
-				}
-			},
-			null,
-			'\t'
-		),
-		'tsconfig.json': JSON.stringify(
-			{
-				compilerOptions: {
-					target: 'ES2022',
-					module: 'ESNext',
-					moduleResolution: 'Bundler',
-					strict: true,
-					verbatimModuleSyntax: true,
-					skipLibCheck: true,
-					noEmit: true
-				},
-				include: ['server', 'ui']
-			},
-			null,
-			'\t'
-		),
-		'.gitignore': 'node_modules\ndist\n',
-		'server/index.ts': `import { definePlugin } from '@pouchbasejs/plugin-sdk/server';
-
-const HEX_COLOR = /^#[0-9a-f]{6}$/i;
-
-export default definePlugin({
-	fields: {
-		color: {
-			validate(value) {
-				return typeof value === 'string' && HEX_COLOR.test(value)
-					? { valid: true }
-					: { valid: false, message: 'Enter a color, e.g. #ff6600' };
-			},
-			serialize(value) {
-				return String(value).toLowerCase();
+			if (pkg.name === '@pouchbasejs/plugin-sdk' && pkg.version) {
+				return pkg.version;
 			}
+		} catch {
+			// Try the next one.
 		}
 	}
-});
-`,
-		'ui/color-input.svelte': `<script lang="ts">
-	import type { FieldInputProps } from '@pouchbasejs/plugin-sdk/ui';
 
-	let { name, value, required, disabled, id, errorId }: FieldInputProps<string> = $props();
-</script>
-
-<input
-	type="color"
-	{id}
-	{name}
-	value={value ?? '#000000'}
-	{required}
-	{disabled}
-	aria-describedby={errorId}
-/>
-`,
-		'ui/color-cell.svelte': `<script lang="ts">
-	import type { FieldCellProps } from '@pouchbasejs/plugin-sdk/ui';
-
-	let { value }: FieldCellProps<string> = $props();
-</script>
-
-<span style:display="inline-flex" style:align-items="center" style:gap="0.375rem">
-	<span
-		style:width="0.75rem"
-		style:height="0.75rem"
-		style:border-radius="9999px"
-		style:background={value}
-	></span>
-	{value}
-</span>
-`,
-		'README.md': `# ${title(id)}
-
-A [Pouchbase](https://pouchbase.io) plugin.
-
-- \`pnpm dev\` builds the plugin on every change and serves it from a local registry; start
-  Pouchbase with the \`PLUGIN_REGISTRY_URL\` it prints and install the plugin on the Plugins page.
-- \`pnpm build\` writes the bundle to \`dist/\`.
-- \`pnpm release\` publishes it to the registry (needs \`POUCHBASE_REGISTRY_TOKEN\`).
-`
-	};
+	throw new ProjectError("Can't find the version of @pouchbasejs/plugin-sdk");
 }
 
-export async function initProject(target: string) {
+/** The template named by `--template`; an error lists the others. */
+export function parseTemplate(value: string): PluginTemplate {
+	if (!isTemplate(value)) {
+		throw new ProjectError(`Unknown template: ${value}; use one of ${TEMPLATES.join(', ')}`);
+	}
+
+	return value;
+}
+
+/**
+ * Asks which template to use. Only in a terminal: without one (CI, scripts, tests) it returns
+ * the default right away, so it never waits for input.
+ */
+export async function askTemplate(
+	input: NodeJS.ReadableStream & { isTTY?: boolean } = process.stdin,
+	output: NodeJS.WritableStream & { isTTY?: boolean } = process.stdout
+): Promise<PluginTemplate> {
+	if (!input.isTTY || !output.isTTY) {
+		return DEFAULT_TEMPLATE;
+	}
+
+	const lines = TEMPLATES.map(
+		(template, index) => `  ${index + 1}. ${template.padEnd(14)} ${TEMPLATE_DESCRIPTIONS[template]}`
+	);
+	const prompt = createInterface({ input, output });
+
+	try {
+		output.write(`Templates:\n${lines.join('\n')}\n`);
+
+		for (;;) {
+			const answer = (
+				await prompt.question(`Template (1-${TEMPLATES.length}, default 1): `)
+			).trim();
+
+			if (!answer) {
+				return DEFAULT_TEMPLATE;
+			}
+
+			const byNumber = TEMPLATES[Number(answer) - 1];
+
+			if (byNumber) {
+				return byNumber;
+			}
+
+			if (isTemplate(answer)) {
+				return answer;
+			}
+
+			output.write(`  Enter a number from 1 to ${TEMPLATES.length} or a template name.\n`);
+		}
+	} finally {
+		prompt.close();
+	}
+}
+
+export async function initProject(
+	target: string,
+	{ template = DEFAULT_TEMPLATE }: { template?: PluginTemplate } = {}
+) {
 	const root = resolve(target);
 	const id = basename(root);
 
@@ -162,10 +108,12 @@ export async function initProject(target: string) {
 		throw new ProjectError(`${root} is not empty`);
 	}
 
-	for (const [path, contents] of Object.entries(templates(id, await sdkVersion()))) {
+	const files = projectFiles(id, template, await sdkVersion());
+
+	for (const [path, contents] of Object.entries(files)) {
 		await mkdir(dirname(join(root, path)), { recursive: true });
 		await writeFile(join(root, path), contents.endsWith('\n') ? contents : `${contents}\n`);
 	}
 
-	return { root, id };
+	return { root, id, template, files: Object.keys(files) };
 }

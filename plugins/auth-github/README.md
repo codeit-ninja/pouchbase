@@ -1,0 +1,14 @@
+# Sign in with GitHub
+
+A first-party [Pouchbase](https://pouchbase.io) plugin that adds the sign-in provider `github`. It is built into Pouchbase and published to the plugin registry as `auth-github`.
+
+- Register an OAuth app in the [GitHub console](https://github.com/settings/developers) with the callback URL `<your Pouchbase URL>/api/auth/oauth2/github/callback`, then enter its client id and secret on the Auth page of the dashboard.
+- The plugin's server code only reads the user's profile, from `api.github.com` (`permissions.network`); Pouchbase handles the redirects and the token exchange.
+
+`pnpm test` checks the profile mapping, `pnpm validate` the manifest and the server code, and `pnpm build` writes the bundle to `dist/` (build `@pouchbasejs/plugin-sdk` first). See [plugins/AGENTS.md](../AGENTS.md).
+
+The logo comes from [`@iconify-json/logos`](https://github.com/gilbarbara/logos) (CC0-1.0).
+
+## License
+
+MIT

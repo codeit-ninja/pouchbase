@@ -1,8 +1,23 @@
 export { API_VERSION, SUPPORTED_API_VERSIONS, isSupportedApiVersion } from './api-version.js';
 export {
+	PLUGIN_CATEGORIES,
+	PLUGIN_CATEGORY_LABELS,
+	CATEGORY_PATTERN,
+	MAX_CATEGORIES,
+	isPluginCategory,
+	unknownCategoryIssues,
+	impliedCategories,
+	effectiveCategories,
+	type PluginCategory
+} from './categories.js';
+export {
 	MANIFEST_FILE,
+	MANIFEST_SCHEMA_URL,
+	PACKAGE_DEFAULT_KEYS,
 	UI_DIR,
 	PLUGIN_ID_PATTERN,
+	PROVIDER_ID_PATTERN,
+	RESERVED_PROVIDER_IDS,
 	manifestSchema,
 	fieldContributionSchema,
 	pageContributionSchema,
@@ -11,6 +26,9 @@ export {
 	parseManifest,
 	defineManifest,
 	checkCompatibility,
+	withPackageDefaults,
+	manifestJsonSchema,
+	type PackageJson,
 	type PluginManifest,
 	type PluginManifestInput,
 	type FieldContribution,
@@ -27,6 +45,7 @@ export {
 	SERVER_FILE,
 	bundleSchema,
 	parseBundle,
+	serverCodeIssues,
 	serializeBundle,
 	computeIntegrity,
 	verifyIntegrity,

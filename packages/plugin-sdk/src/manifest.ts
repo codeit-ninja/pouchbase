@@ -1,6 +1,8 @@
 import semver from 'semver';
 import { z } from 'zod';
 
+import { CATEGORY_PATTERN, MAX_CATEGORIES, PLUGIN_CATEGORIES } from './categories.js';
+
 /**
  * The plugin manifest: `pouchbase-plugin.json` in the root of a plugin. It says what the plugin
  * contributes, so a host can list, check and install it without running any of its code.
@@ -8,6 +10,9 @@ import { z } from 'zod';
 
 /** File name of the manifest in the root of a plugin. */
 export const MANIFEST_FILE = 'pouchbase-plugin.json';
+
+/** URL of the manifest's JSON Schema, for `"$schema"` in `pouchbase-plugin.json`. */
+export const MANIFEST_SCHEMA_URL = 'https://pouchbase.io/schemas/plugin-manifest.json';
 
 /** Directory that holds every UI file of a plugin; the host compiles it on install. */
 export const UI_DIR = 'ui';
@@ -18,8 +23,11 @@ export const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 /** `color`, `rich_color`: same rules as the built-in field types. */
 const FIELD_TYPE_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
 
-/** `gitlab`, `my-sso`. */
-const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+/** A sign-in provider id: `gitlab`, `my-sso`. Hosts use it in URLs and the API as is. */
+export const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
+/** Ids of the sign-in methods Pouchbase has itself; plugins can't contribute providers with them. */
+export const RESERVED_PROVIDER_IDS: readonly string[] = ['password', 'email', 'otp'];
 
 /** `stats`, `reports/monthly`. */
 const PAGE_PATH_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
@@ -44,6 +52,12 @@ const relativePath = z
 const componentPath = relativePath.refine(
 	(path) => path.startsWith(`${UI_DIR}/`) && path.endsWith('.svelte'),
 	`Must be a .svelte file in the ${UI_DIR}/ directory`
+);
+
+/** An SVG image in the `ui/` directory, e.g. a provider's logo. */
+const imagePath = relativePath.refine(
+	(path) => path.startsWith(`${UI_DIR}/`) && path.endsWith('.svg'),
+	`Must be a .svg file in the ${UI_DIR}/ directory`
 );
 
 const label = z.string().trim().min(1).max(64);
@@ -74,17 +88,27 @@ export const pageContributionSchema = z.object({
 });
 
 export const authProviderContributionSchema = z.object({
-	/** Id of the provider, unique within the plugin; the host stores it as `<plugin>.<id>`. */
-	id: z.string().regex(PROVIDER_ID_PATTERN, 'Use lowercase words separated by dashes'),
+	/**
+	 * The public id of the provider, e.g. `gitlab`: it is used as is in the sign-in URLs and the
+	 * API, not namespaced by the plugin. It is unique per host, so a host refuses to install a
+	 * plugin whose provider id another installed plugin already contributes.
+	 */
+	id: z
+		.string()
+		.regex(PROVIDER_ID_PATTERN, 'Use lowercase words separated by dashes')
+		.refine((id) => !RESERVED_PROVIDER_IDS.includes(id), 'This id is reserved by Pouchbase'),
 	label,
 	/** Where an admin registers the OAuth app, shown next to the client id and secret. */
-	consoleUrl: z.url().optional()
+	consoleUrl: z.url().optional(),
+	/** The provider's logo for the sign-in button and the settings, e.g. `ui/gitlab.svg`. */
+	icon: imagePath.optional()
 });
 
 export const permissionsSchema = z.object({
 	/**
-	 * Hosts the server code may reach with `ctx.fetch`; `*.example.com` also allows its
-	 * subdomains. Everything else is blocked.
+	 * Hosts the server code may reach with `ctx.fetch`, over HTTPS; `*.example.com` allows the
+	 * subdomains of `example.com` (at any depth), not `example.com` itself; list both for both.
+	 * Everything else is blocked.
 	 */
 	network: z
 		.array(z.string().regex(HOST_PATTERN, 'Must be a host name, e.g. api.example.com'))
@@ -94,6 +118,8 @@ export const permissionsSchema = z.object({
 
 export const manifestSchema = z
 	.object({
+		/** JSON Schema for editors, usually `MANIFEST_SCHEMA_URL`; hosts ignore it. */
+		$schema: z.string().optional(),
 		/** The plugin contract this plugin was written against; see `API_VERSION`. */
 		apiVersion: z.number().int().positive(),
 		id: z
@@ -119,6 +145,15 @@ export const manifestSchema = z
 		homepage: z.url().optional(),
 		repository: z.url().optional(),
 		keywords: z.array(z.string().trim().min(1).max(32)).max(10).default([]),
+		/**
+		 * Where the registry lists the plugin, from `PLUGIN_CATEGORIES`. Hosts only check the
+		 * pattern, so categories added later don't break installs; the CLI and the registry
+		 * reject unknown ones. Empty means the categories implied by `contributes`.
+		 */
+		categories: z
+			.array(z.string().regex(CATEGORY_PATTERN, 'Use lowercase words separated by dashes'))
+			.max(MAX_CATEGORIES)
+			.default([]),
 		engines: z
 			.object({
 				/** Pouchbase versions the plugin works with, as a semver range, e.g. `>=0.4.0`. */
@@ -143,6 +178,16 @@ export const manifestSchema = z
 	})
 	.superRefine((manifest, ctx) => {
 		const { fields, pages, authProviders } = manifest.contributes;
+
+		manifest.categories.forEach((category, index) => {
+			if (manifest.categories.indexOf(category) !== index) {
+				ctx.addIssue({
+					code: 'custom',
+					path: ['categories', index],
+					message: `Duplicate category: ${category}`
+				});
+			}
+		});
 
 		for (const [key, ids] of [
 			['fields', fields.map((field) => field.type)],
@@ -189,6 +234,120 @@ export type ManifestIssue = { path: string; message: string };
 
 export type ManifestResult =
 	{ success: true; manifest: PluginManifest } | { success: false; issues: ManifestIssue[] };
+
+/** The fields of `package.json` that `withPackageDefaults` reads. */
+export type PackageJson = {
+	name?: string;
+	version?: string;
+	description?: string;
+	license?: string;
+	author?: string | { name?: string; email?: string; url?: string };
+	homepage?: string;
+	repository?: string | { url?: string };
+	keywords?: string[];
+};
+
+/** Fields of the manifest that may be left out when the plugin's `package.json` has them. */
+export const PACKAGE_DEFAULT_KEYS = [
+	'name',
+	'version',
+	'description',
+	'license',
+	'author',
+	'homepage',
+	'repository',
+	'keywords'
+] as const;
+
+/** `Jane Doe <jane@example.com> (https://example.com)`, npm's author shorthand. */
+const PERSON = /^([^<(]*?)\s*(?:<([^>]*)>)?\s*(?:\(([^)]*)\))?$/;
+
+function person(author: PackageJson['author']) {
+	if (typeof author === 'string') {
+		const [, name = '', email, url] = PERSON.exec(author.trim()) ?? [];
+
+		return name ? { name, email: email || undefined, url: url || undefined } : undefined;
+	}
+
+	return author?.name ? { name: author.name, email: author.email, url: author.url } : undefined;
+}
+
+/** A browsable URL for `repository`: without `git+` and `.git`, shorthands expanded. */
+function repositoryUrl(repository: PackageJson['repository']) {
+	const value = (typeof repository === 'string' ? repository : repository?.url)?.trim();
+
+	if (!value) {
+		return undefined;
+	}
+
+	const shorthand = /^(?:github:)?([\w.-]+\/[\w.-]+)$/.exec(value);
+
+	if (shorthand) {
+		return `https://github.com/${shorthand[1]}`;
+	}
+
+	return value.replace(/^git\+/, '').replace(/\.git$/, '');
+}
+
+/**
+ * Fills the manifest fields that `pouchbase-plugin.json` leaves out from the plugin's
+ * `package.json`: `name`, `version`, `description`, `license`, `author`, `homepage`,
+ * `repository` and `keywords`. The manifest wins; validate the result with `parseManifest`.
+ */
+export function withPackageDefaults(
+	manifest: Record<string, unknown>,
+	pkg: PackageJson
+): Record<string, unknown> {
+	const defaults: Record<string, unknown> = {
+		name: pkg.name,
+		version: pkg.version,
+		description: pkg.description,
+		license: pkg.license,
+		author: person(pkg.author),
+		homepage: pkg.homepage,
+		repository: repositoryUrl(pkg.repository),
+		keywords: pkg.keywords
+	};
+	const result = { ...manifest };
+
+	for (const key of PACKAGE_DEFAULT_KEYS) {
+		if (result[key] === undefined && defaults[key] !== undefined) {
+			result[key] = defaults[key];
+		}
+	}
+
+	return result;
+}
+
+/**
+ * The JSON Schema of `pouchbase-plugin.json` (draft 2020-12), served at `MANIFEST_SCHEMA_URL`
+ * and printed by `pouchbase-plugin schema`. Fields that `package.json` can fill are optional, and
+ * `categories` lists the known categories, which the CLI requires.
+ */
+export function manifestJsonSchema(): Record<string, unknown> {
+	const schema = z.toJSONSchema(manifestSchema, {
+		target: 'draft-2020-12',
+		io: 'input',
+		unrepresentable: 'any'
+	}) as Record<string, unknown>;
+	const properties = schema.properties as Record<string, { items?: Record<string, unknown> }>;
+	const optional = new Set<string>(PACKAGE_DEFAULT_KEYS);
+
+	if (properties.categories?.items) {
+		properties.categories.items = { type: 'string', enum: [...PLUGIN_CATEGORIES] };
+	}
+
+	const required = Array.isArray(schema.required)
+		? (schema.required as string[]).filter((key) => !optional.has(key))
+		: [];
+
+	return {
+		...schema,
+		$id: MANIFEST_SCHEMA_URL,
+		title: 'Pouchbase plugin manifest',
+		required
+	};
+}
 
 /** Validates a parsed `pouchbase-plugin.json`. */
 export function parseManifest(value: unknown): ManifestResult {

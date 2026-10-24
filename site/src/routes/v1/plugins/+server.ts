@@ -1,5 +1,7 @@
 import type { RequestHandler } from './$types';
 
+import { CATEGORY_PATTERN } from '@pouchbasejs/plugin-sdk';
+
 import {
 	apiVersionsOf,
 	failureResponse,
@@ -22,7 +24,10 @@ function positiveInteger(value: string | null, fallback: number) {
 	return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
-/** `GET /v1/plugins?q=&page=&perPage=&apiVersion=` → `PluginList`, most downloaded first. */
+/**
+ * `GET /v1/plugins?q=&category=&page=&perPage=&apiVersion=` → `PluginList`, most downloaded
+ * first.
+ */
 export const GET: RequestHandler = async ({ url }) => {
 	const page = positiveInteger(url.searchParams.get('page'), 1);
 	const perPage = positiveInteger(url.searchParams.get('perPage'), 20);
@@ -35,9 +40,20 @@ export const GET: RequestHandler = async ({ url }) => {
 		);
 	}
 
+	const category = url.searchParams.get('category') || undefined;
+
+	if (category !== undefined && !CATEGORY_PATTERN.test(category)) {
+		return registryError(
+			400,
+			'invalid_query',
+			'category must be lowercase words separated by dashes'
+		);
+	}
+
 	try {
 		const list = await searchPlugins({
 			query: url.searchParams.get('q') ?? undefined,
+			category,
 			page,
 			perPage,
 			apiVersions: apiVersionsOf(url)

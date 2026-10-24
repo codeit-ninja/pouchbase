@@ -10,7 +10,7 @@ import {
 	isPouchbaseError,
 	isTokenValid
 } from '../src/index.js';
-import type { JsonValue, Page, User } from '../src/index.js';
+import type { JsonValue, KnownOAuthProvider, OAuthProvider, Page, User } from '../src/index.js';
 import { compileOrderBy, compileWhere } from '../src/query.js';
 
 type Call = { url: string; init: RequestInit };
@@ -92,6 +92,29 @@ describe('Pouchbase', () => {
 });
 
 describe('auth', () => {
+	it('lists the enabled providers, including ones from plugins', async () => {
+		const providers = [
+			{
+				provider: 'google',
+				label: 'Google',
+				iconUrl: 'https://pb.example.com/api/plugins/auth-google/assets/ui/google.svg?v=1.0.0'
+			},
+			{ provider: 'gitlab', label: 'GitLab', iconUrl: null }
+		];
+		const { fetch, calls } = mockFetch([200, providers]);
+		const pb = new Pouchbase('https://pb.example.com', { fetch });
+
+		const result = await pb.auth.providers();
+
+		expect(result).toEqual(providers);
+		expect(calls[0]?.url).toBe('https://pb.example.com/api/auth/providers');
+		expectTypeOf(result[0]!.iconUrl).toEqualTypeOf<string | null>();
+		expectTypeOf<'gitlab'>().toExtend<OAuthProvider>();
+		expectTypeOf<KnownOAuthProvider>().toEqualTypeOf<
+			'google' | 'github' | 'microsoft' | 'discord' | 'twitch'
+		>();
+	});
+
 	it('signs in and stores the token', async () => {
 		const { fetch, calls } = mockFetch([200, { token: 'abc', user_id: 'u1' }]);
 		const pb = new Pouchbase('https://pb.example.com', { fetch });

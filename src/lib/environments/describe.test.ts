@@ -64,8 +64,25 @@ describe('describeStep', () => {
 
 describe('describeWarning', () => {
 	it('names the provider', () => {
-		expect(describeWarning({ kind: 'oauth.secret', provider: 'github' })).toBe(
+		expect(describeWarning({ kind: 'oauth.secret', provider: 'github', label: 'GitHub' })).toBe(
 			'Sign-in with GitHub needs its client secret on the target; it stays off until then.'
 		);
+	});
+
+	it('falls back to the provider id in plans without labels', () => {
+		expect(describeWarning({ kind: 'oauth.secret', provider: 'github' })).toBe(
+			'Sign-in with github needs its client secret on the target; it stays off until then.'
+		);
+	});
+
+	it('names the plugin a provider needs', () => {
+		expect(
+			describeWarning({
+				kind: 'oauth.plugin',
+				provider: 'gitlab',
+				label: 'GitLab',
+				pluginId: 'auth-gitlab'
+			})
+		).toBe('Sign-in with GitLab needs the plugin auth-gitlab on the target; it is left out.');
 	});
 });

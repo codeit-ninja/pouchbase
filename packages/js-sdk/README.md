@@ -67,6 +67,14 @@ button.addEventListener('click', async () => {
 
 The token never appears in a URL: the SDK proves it started the sign-in with a secret PKCE verifier and collects the result itself. Outside the browser, pass `open: (url) => …` to open the sign-in page another way.
 
+Sign-in providers come from plugins: Google, GitHub, Microsoft, Discord and Twitch are built in (`KNOWN_OAUTH_PROVIDERS`), and every installed sign-in plugin adds its own, so a provider is any id. Build the buttons from `pb.auth.providers()`, which returns the enabled ones with their `label` and `iconUrl` (the logo, or `null`):
+
+```ts
+for (const { provider, label, iconUrl } of await pb.auth.providers()) {
+	renderButton({ label, iconUrl, onclick: () => pb.auth.signInWithOAuth(provider) });
+}
+```
+
 ### Records
 
 Every collection is a typed property of `pb.db`. With the generated `Schema`, field names, conditions, the sort order, selected fields, the values you send and the results are all checked by TypeScript:

@@ -84,6 +84,8 @@ export type PlanStep = { severity: Severity } & (
 	| {
 			kind: 'oauth.update';
 			provider: SnapshotOAuthProvider['provider'];
+			/** Missing in plans made before sign-in providers were plugins. */
+			label?: string;
 			enabled: boolean;
 			clientId: string;
 	  }
@@ -94,7 +96,9 @@ export type PlanStepKind = PlanStep['kind'];
 /** Something the plan can't do itself, to be done on the target by hand. */
 export type PlanWarning =
 	| { kind: 'function.secret'; function: string; secret: string }
-	| { kind: 'oauth.secret'; provider: string }
+	| { kind: 'oauth.secret'; provider: string; label?: string }
+	/** No plugin on the target contributes the provider, and the plan doesn't install one. */
+	| { kind: 'oauth.plugin'; provider: string; label?: string; pluginId?: string }
 	| { kind: 'setting.secret'; key: string }
 	| { kind: 'plugin.api'; plugin: string; apiVersion: number }
 	| { kind: 'collection.system'; collection: string };
@@ -524,6 +528,22 @@ function diffSettings(
 		const existing = target.oauthProviders.find(
 			(candidate) => candidate.provider === provider.provider
 		);
+		const label = provider.label ?? existing?.label;
+
+		// Providers come from plugins: one the target doesn't have can only be set up when the plan
+		// installs its plugin there.
+		if (
+			!existing &&
+			!steps.some((step) => step.kind === 'plugin.install' && step.plugin.id === provider.pluginId)
+		) {
+			warnings.push({
+				kind: 'oauth.plugin',
+				provider: provider.provider,
+				...(label ? { label } : {}),
+				...(provider.pluginId ? { pluginId: provider.pluginId } : {})
+			});
+			continue;
+		}
 
 		if (
 			!existing ||
@@ -534,13 +554,18 @@ function diffSettings(
 				kind: 'oauth.update',
 				severity: 'safe',
 				provider: provider.provider,
+				...(label ? { label } : {}),
 				enabled: provider.enabled,
 				clientId: provider.clientId
 			});
 		}
 
 		if (provider.enabled && !existing?.hasSecret) {
-			warnings.push({ kind: 'oauth.secret', provider: provider.provider });
+			warnings.push({
+				kind: 'oauth.secret',
+				provider: provider.provider,
+				...(label ? { label } : {})
+			});
 		}
 	}
 }

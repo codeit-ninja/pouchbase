@@ -12,6 +12,10 @@
 #      (docker.yml) and attaches the single binaries (binaries.yml).
 #    - when the site's version has no `site-v<version>` tag yet, it deploys pouchbase.io to
 #      Cloudflare Workers and creates that tag.
+#    - the first-party plugins in plugins/ whose version isn't on the plugin registry yet are built
+#      and published to it (`pnpm release:plugins`, see scripts/publish-plugins.mjs), with the
+#      POUCHBASE_REGISTRY_TOKEN secret (a publish token of the account that owns the plugin ids) and
+#      the optional POUCHBASE_REGISTRY_URL variable (default https://api.pouchbase.io).
 #
 # Nothing is built or deployed for a push that doesn't bump a version. Workers Builds is not used:
 # the deploys need the CLOUDFLARE_API_TOKEN secret (Workers Scripts: Edit) and the
@@ -48,6 +52,7 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
       prerelease: ${{ steps.release.outputs.prerelease }}
       site-tag: ${{ steps.site.outputs.tag }}
+      has-changesets: ${{ steps.changesets.outputs.hasChangesets }}
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -237,6 +242,37 @@ jobs:
         run: |
           git tag "$TAG" "$GITHUB_SHA"
           git push origin "refs/tags/${TAG}"
+
+  # A separate job, so a failed plugin publish doesn't hold up the app and can be re-run on its own.
+  publish-plugins:
+    name: Publish the plugins
+    needs: release
+    if: needs.release.outputs.has-changesets == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter "@pouchbase-plugins/*..."
+
+      # Builds the plugin SDK, then publishes every plugin whose id@version the registry lacks.
+      - name: Publish to the plugin registry
+        run: pnpm release:plugins
+        env:
+          POUCHBASE_REGISTRY_TOKEN: ${{ secrets.POUCHBASE_REGISTRY_TOKEN }}
+          POUCHBASE_REGISTRY_URL: ${{ vars.POUCHBASE_REGISTRY_URL }}
 
   docker:
     name: Docker image

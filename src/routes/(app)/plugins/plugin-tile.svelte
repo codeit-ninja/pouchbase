@@ -6,6 +6,7 @@
 	import * as Icon from '#lib/components/ui/icon/index.js';
 	import * as Tile from '#lib/components/ui/tile/index.js';
 	import InstallPluginDialog from './install-plugin-dialog.svelte';
+	import PluginCategories from './plugin-categories.svelte';
 	import type { InstalledPlugin } from './types';
 
 	type Props = {
@@ -45,6 +46,8 @@
 	</Tile.Header>
 
 	<Tile.Description class="line-clamp-3">{plugin.description}</Tile.Description>
+
+	<PluginCategories categories={plugin.categories} />
 
 	<Tile.Footer class="justify-between">
 		<Badge.Root variant="outline" class="font-mono">{plugin.version}</Badge.Root>

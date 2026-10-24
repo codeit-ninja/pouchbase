@@ -22,7 +22,7 @@
 	];
 
 	const endpoints = [
-		['GET /api/auth/providers', 'The active OAuth providers'],
+		['GET /api/auth/providers', 'The active OAuth providers: [{ provider, label, iconUrl }]'],
 		[
 			'POST /api/auth/password/sign-up',
 			'{ name, email, password } → { token, user_id, verification_required }; 400 or 409 with issues per field'
@@ -118,9 +118,10 @@
 			verified. Admins set a user's password in the <Code.Root>users</Code.Root> collection.
 		</li>
 		<li>
-			<strong>OAuth</strong> with Google, GitHub, Microsoft, Discord and Twitch. Create an OAuth app at
-			the provider, register the callback URL that the setup dialog shows, then enter the client ID and
-			secret.
+			<strong>OAuth</strong> with Google, GitHub, Microsoft, Discord and Twitch, or any provider a
+			<a href="{resolve('/docs/plugins')}#sign-in-providers">sign-in plugin</a> adds. The five are
+			built-in plugins; install more from the <strong>Plugins</strong> page. Create an OAuth app at the
+			provider, register the callback URL that the setup dialog shows, then enter the client ID and secret.
 		</li>
 	</ul>
 
@@ -156,6 +157,14 @@
 		(PKCE), and only a caller with that verifier can collect the result, by polling
 		<Code.Root>POST /api/auth/oauth2/result</Code.Root>. Outside the browser, pass
 		<Code.Root>open: (url) =&gt; …</Code.Root> to open the sign-in page another way.
+	</p>
+
+	<p>
+		Build the sign-in buttons from <Code.Root>pb.auth.providers()</Code.Root>: it lists the enabled
+		providers with their <Code.Root>label</Code.Root> and <Code.Root>iconUrl</Code.Root>, the URL of
+		the provider's logo (an SVG, or <Code.Root>null</Code.Root>). A provider id is any lowercase id,
+		such as <Code.Root>gitlab</Code.Root>; <Code.Root>KNOWN_OAUTH_PROVIDERS</Code.Root> lists the built-in
+		ones.
 	</p>
 
 	<p>

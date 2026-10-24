@@ -19,10 +19,10 @@ function requireUser() {
  * Plugins in the registry. A registry that can't be reached is not an error of the page: it comes
  * back as `error`, so the installed plugins still show.
  */
-export const searchPlugins = query(searchPluginsSchema, async ({ query, page }) => {
+export const searchPlugins = query(searchPluginsSchema, async ({ query, page, category }) => {
 	const { services } = requireUser();
 
-	const result = await services.plugins().search(query, page);
+	const result = await services.plugins().search(query, page, category);
 
 	if (result.isErr()) {
 		return {
@@ -91,6 +91,26 @@ export const installPlugin = form(pluginIdSchema, async ({ id }) => {
 			invalid(`The plugin's bundle is not valid${detail}`);
 		}
 
+		if (failure.code === 19007) {
+			invalid(`The plugin's Worker could not be deployed: ${failure.data.reason}`);
+		}
+
+		if (failure.code === 19008) {
+			invalid(
+				`The sign-in provider ${failure.data.provider} already comes from the plugin ${failure.data.pluginId}`
+			);
+		}
+
+		if (failure.code === 19009) {
+			invalid(`The plugin's server code did not answer as expected: ${failure.data.reason}`);
+		}
+
+		if (failure.code === 19011) {
+			invalid(
+				'The Cloudflare account has no workers.dev subdomain yet. Open Workers & Pages in the Cloudflare dashboard once to choose one, then try again.'
+			);
+		}
+
 		error(500, failure.message);
 	}
 
@@ -105,6 +125,10 @@ export const uninstallPlugin = form(pluginIdSchema, async ({ id }) => {
 	const result = await services.plugins().uninstall(id);
 
 	if (result.isErr()) {
+		if (result.error.code === 19010) {
+			invalid('Built-in plugins ship with Pouchbase and cannot be removed');
+		}
+
 		error(500, result.error.message);
 	}
 

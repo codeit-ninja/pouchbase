@@ -7,6 +7,7 @@
 	import * as Icon from '#lib/components/ui/icon/index.js';
 	import * as Link from '#lib/components/ui/link/index.js';
 	import * as Skeleton from '#lib/components/ui/skeleton/index.js';
+	import PluginCategories from './plugin-categories.svelte';
 	import { getPluginDetails, installPlugin } from './plugins.remote';
 
 	type Props = {
@@ -25,6 +26,7 @@
 	<Dialog.Header>
 		<Dialog.Title>{action} {plugin.name}</Dialog.Title>
 		<Dialog.Description>{plugin.description}</Dialog.Description>
+		<PluginCategories categories={plugin.categories} class="pt-1" />
 	</Dialog.Header>
 
 	<svelte:boundary>

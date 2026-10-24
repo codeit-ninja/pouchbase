@@ -9,6 +9,21 @@ pnpm install
 pnpm dev`
 );
 
+export const templates = snippet(
+	'bash',
+	`
+npx @pouchbasejs/plugin-sdk init my-page --template page
+npx @pouchbasejs/plugin-sdk init auth-gitlab --template auth-provider   # the provider gitlab`
+);
+
+export const add = snippet(
+	'bash',
+	`
+npx pouchbase-plugin add field rating            # ui/rating-input.svelte, ui/rating-cell.svelte
+npx pouchbase-plugin add page reports/monthly    # ui/reports-monthly-page.svelte
+npx pouchbase-plugin add auth-provider gitlab    # server/index.ts when there is no server code yet`
+);
+
 export const layout = snippet(
 	'bash',
 	`
@@ -24,12 +39,14 @@ export const manifest = snippet(
 	'json',
 	`
 {
+	"$schema": "https://pouchbase.io/schemas/plugin-manifest.json",
 	"apiVersion": 1,
 	"id": "color-picker",
 	"name": "Color picker",
 	"version": "1.0.0",
 	"description": "Adds a color field type.",
 	"license": "MIT",
+	"categories": ["fields"],
 	"engines": { "pouchbase": ">=0.4.0" },
 	"permissions": { "network": ["api.example.com"] },
 	"server": "server/index.ts",
@@ -65,6 +82,60 @@ export default definePlugin({
 	},
 	routes: {
 		'GET /stats': async (request, ctx) => Response.json({ ok: true })
+	}
+});`
+);
+
+export const packageDefaults = snippet(
+	'json',
+	`
+{
+	"name": "color-picker",
+	"version": "1.0.0",
+	"description": "Adds a color field type.",
+	"license": "MIT",
+	"author": "Jane Doe <jane@example.com>",
+	"repository": "github:jane/color-picker"
+}`
+);
+
+export const authProvider = snippet(
+	'typescript',
+	`
+import { createOidcProvider, definePlugin, fetchJson } from '@pouchbasejs/plugin-sdk/server';
+
+type ForgejoUser = { id: number; login: string; email: string; avatar_url: string };
+
+export default definePlugin({
+	authProviders: {
+		// An OpenID Connect provider: the profile comes from its userinfo endpoint
+		gitlab: createOidcProvider({
+			authorizeUrl: 'https://gitlab.com/oauth/authorize',
+			tokenUrl: 'https://gitlab.com/oauth/token',
+			userinfoUrl: 'https://gitlab.com/oauth/userinfo'
+		}),
+		// A provider with its own profile API
+		forgejo: {
+			authorizeUrl: 'https://codeberg.org/login/oauth/authorize',
+			tokenUrl: 'https://codeberg.org/login/oauth/access_token',
+			scopes: ['read:user'],
+			pkce: true,
+			async profile(accessToken, credentials, ctx) {
+				const user = await fetchJson<ForgejoUser>(
+					ctx,
+					'https://codeberg.org/api/v1/user',
+					accessToken
+				);
+
+				return {
+					id: String(user.id),
+					email: user.email || null,
+					emailVerified: false,
+					name: user.login,
+					avatarUrl: user.avatar_url
+				};
+			}
+		}
 	}
 });`
 );

@@ -163,6 +163,7 @@ export const getMyPlugins = query(async () => {
 		name: plugin.name,
 		description: plugin.description,
 		version: plugin.version,
+		categories: plugin.categories ?? [],
 		downloads: plugin.downloads,
 		verified: plugin.verified,
 		updatedAt: plugin.updated_at

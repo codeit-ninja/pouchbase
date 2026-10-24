@@ -1872,6 +1872,11 @@ export class RecordsService extends Service {
 		}
 
 		const placeholders = userIds.map(() => '?').join(', ');
+		// Labels and logos are a nicety: without them the provider id is shown.
+		const providers = this.services
+			.oauthProviders()
+			.labels()
+			.unwrapOr(new Map<string, { label: string; iconUrl: string | null }>());
 		const [linked, passwords] = await batchDatabase(databaseId, [
 			{
 				sql: `SELECT "user_id", "provider", "provider_id", "created_at" FROM "_external_auths" WHERE "user_id" IN (${placeholders}) ORDER BY "created_at"`,
@@ -1883,9 +1888,15 @@ export class RecordsService extends Service {
 			}
 		]);
 
+		const info = await providers;
+
 		for (const [userId, provider, providerId, createdAt] of linked) {
+			const id = String(provider);
+
 			methods[String(userId)]?.push({
-				provider: String(provider) as SignInMethod['provider'],
+				provider: id,
+				label: info.get(id)?.label ?? id,
+				iconUrl: info.get(id)?.iconUrl ?? null,
 				providerId: String(providerId),
 				linkedAt: Number(createdAt)
 			});
@@ -1894,6 +1905,8 @@ export class RecordsService extends Service {
 		for (const [userId, updatedAt] of passwords) {
 			methods[String(userId)]?.push({
 				provider: 'password',
+				label: 'Password',
+				iconUrl: null,
 				providerId: null,
 				linkedAt: Number(updatedAt)
 			});

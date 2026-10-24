@@ -27,6 +27,10 @@ export type PluginRecord = {
 	icon_url: string | null;
 	/** A JSON array. */
 	keywords: string[];
+	/** A JSON array: the manifest's categories, or the ones implied by what the plugin contributes. */
+	categories: string[];
+	/** `categories` as text such as `,auth,fields,`, so a filter can look for `,auth,`. */
+	categories_text: string;
 	/** Newest version and its API version. */
 	version: string;
 	api_version: number;

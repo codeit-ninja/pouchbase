@@ -12,9 +12,33 @@
  * <input type="color" {name} value={value ?? '#000000'} {required} {disabled} />
  * ```
  *
- * A UI file may import `svelte`, `svelte/*`, `@pouchbasejs/plugin-sdk/ui` and other files in the
- * plugin's `ui/` directory, nothing else.
+ * A UI file may import the `HOST_MODULES` and other files in the plugin's `ui/` directory,
+ * nothing else.
  */
+
+/**
+ * Modules a UI file may import besides files in `ui/`. The host provides them at runtime, in the
+ * versions the dashboard itself uses, so a plugin never bundles its own copy: `svelte` and its
+ * subpaths, the prop types from `@pouchbasejs/plugin-sdk/ui`, and the dashboard's components from
+ * `@pouchbasejs/ui` (`import * as Button from '@pouchbasejs/ui/button'`). Install them as
+ * devDependencies for type checking only. A `/*` entry also allows every subpath.
+ */
+export const HOST_MODULES = [
+	'svelte',
+	'svelte/*',
+	'@pouchbasejs/plugin-sdk/ui',
+	'@pouchbasejs/ui',
+	'@pouchbasejs/ui/*'
+] as const;
+
+/** Whether a UI file may import `specifier`, which is not a relative path. */
+export function isHostModule(specifier: string): boolean {
+	return HOST_MODULES.some((module) =>
+		module.endsWith('/*')
+			? specifier.startsWith(module.slice(0, -1)) && specifier.length > module.length - 1
+			: specifier === module
+	);
+}
 
 /** The field a component is rendered for. */
 export type FieldInfo = {

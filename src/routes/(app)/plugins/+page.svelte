@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { PLUGIN_CATEGORIES, PLUGIN_CATEGORY_LABELS } from '@pouchbasejs/plugin-sdk';
+	import type { PluginCategory } from '@pouchbasejs/plugin-sdk';
 	import { Debounced } from 'runed';
 	import * as Badge from '#lib/components/ui/badge/index.js';
 	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
@@ -9,6 +11,7 @@
 	import * as Icon from '#lib/components/ui/icon/index.js';
 	import * as Input from '#lib/components/ui/inputs/input/index.js';
 	import * as Page from '#lib/components/ui/page/index.js';
+	import * as Select from '#lib/components/ui/inputs/select/index.js';
 	import * as Segmented from '#lib/components/ui/segmented/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Tile from '#lib/components/ui/tile/index.js';
@@ -20,11 +23,23 @@
 	let tab = $state<'marketplace' | 'installed'>('marketplace');
 	let search = $state('');
 	let page = $state(1);
+	let category = $state<PluginCategory | 'all'>('all');
+
+	const categoryItems: Select.Item[] = [
+		{ value: 'all', label: 'All categories' },
+		...PLUGIN_CATEGORIES.map((value) => ({ value, label: PLUGIN_CATEGORY_LABELS[value] }))
+	];
 
 	const query = new Debounced(() => search.trim(), 300);
 
 	const installed = $derived(await getInstalledPlugins());
-	const results = $derived(await searchPlugins({ query: query.current, page }));
+	const results = $derived(
+		await searchPlugins({
+			query: query.current,
+			page,
+			category: category === 'all' ? undefined : category
+		})
+	);
 	const installedById = $derived(
 		Object.fromEntries(installed.map((plugin) => [plugin.id, plugin]))
 	);
@@ -71,7 +86,8 @@
 				<Page.Title>Plugins</Page.Title>
 				<Page.Description>
 					Add field types, pages and sign-in providers to Pouchbase. Plugins come from the plugin
-					registry and run in a sandbox.
+					registry and run their server code in a Worker of their own on your Cloudflare account;
+					built-in plugins ship with Pouchbase.
 				</Page.Description>
 			</div>
 
@@ -93,18 +109,30 @@
 		<Callout.Root>
 			<Icon.Root icon="lucide:flask-conical" class="size-4 shrink-0" />
 			<p>
-				Plugin support is in development. Installed plugins are stored, but the field types, pages
-				and sign-in providers they add don't run yet.
+				Plugin support is in development. Installing a plugin deploys its server code and registers
+				the sign-in providers it adds, but sign-in still uses the built-in providers, and field
+				types and pages don't run yet.
 			</p>
 		</Callout.Root>
 
 		{#if tab === 'marketplace'}
-			<Input.Root
-				type="search"
-				placeholder="Search plugins…"
-				aria-label="Search plugins"
-				bind:value={() => search, (value) => ((search = value ?? ''), (page = 1))}
-			/>
+			<div class="flex flex-col gap-2 sm:flex-row">
+				<Input.Root
+					type="search"
+					placeholder="Search plugins…"
+					aria-label="Search plugins"
+					class="flex-1"
+					bind:value={() => search, (value) => ((search = value ?? ''), (page = 1))}
+				/>
+				<Select.Root
+					items={categoryItems}
+					aria-label="Category"
+					class="sm:w-52"
+					bind:value={
+						() => category, (value) => ((category = value as typeof category), (page = 1))
+					}
+				/>
+			</div>
 
 			{#if results.error}
 				<Callout.Root variant="error">
@@ -134,11 +162,15 @@
 			{:else}
 				<Empty.Root>
 					<Empty.Icon><Icon.Root icon="lucide:puzzle" /></Empty.Icon>
-					<Empty.Title>{query.current ? 'No plugins found' : 'No plugins yet'}</Empty.Title>
+					<Empty.Title>
+						{query.current || category !== 'all' ? 'No plugins found' : 'No plugins yet'}
+					</Empty.Title>
 					<Empty.Description>
 						{query.current
 							? 'Try another search term.'
-							: 'Plugins published to the registry show up here.'}
+							: category !== 'all'
+								? 'No plugins in this category yet.'
+								: 'Plugins published to the registry show up here.'}
 					</Empty.Description>
 				</Empty.Root>
 			{/if}
@@ -163,21 +195,28 @@
 								</div>
 							</Table.Cell>
 							<Table.Cell>
-								<Badge.Root variant="outline" class="font-mono">{plugin.version}</Badge.Root>
+								<div class="flex items-center gap-1.5">
+									<Badge.Root variant="outline" class="font-mono">{plugin.version}</Badge.Root>
+									{#if plugin.embedded}
+										<Badge.Root>Built in</Badge.Root>
+									{/if}
+								</div>
 							</Table.Cell>
 							<Table.Cell class="whitespace-nowrap">{contributions(plugin)}</Table.Cell>
 							<Table.Cell class="whitespace-nowrap">
-								{dateFormat.format(plugin.installedAt)}
+								{plugin.installedAt ? dateFormat.format(plugin.installedAt) : 'With Pouchbase'}
 							</Table.Cell>
 							<Table.Cell class="text-right">
-								<Button.Root
-									variant="ghost"
-									size="icon"
-									aria-label={`Remove ${plugin.name}`}
-									onclick={() => void dialogs.open(UninstallPluginDialog, { plugin })}
-								>
-									<Icon.Root icon="lucide:trash-2" />
-								</Button.Root>
+								{#if !plugin.embedded}
+									<Button.Root
+										variant="ghost"
+										size="icon"
+										aria-label={`Remove ${plugin.name}`}
+										onclick={() => void dialogs.open(UninstallPluginDialog, { plugin })}
+									>
+										<Icon.Root icon="lucide:trash-2" />
+									</Button.Root>
+								{/if}
 							</Table.Cell>
 						</Table.Row>
 					{/each}

@@ -2,7 +2,7 @@ import type { RequestHandler } from './$types';
 
 import { redirect } from '@sveltejs/kit';
 
-import { isOAuthProvider } from '#lib/auth/oauth-providers.js';
+import { PROVIDER_ID_PATTERN } from '#lib/auth/oauth-providers.js';
 import { json } from '#lib/server/api.js';
 
 /**
@@ -13,7 +13,7 @@ import { json } from '#lib/server/api.js';
 export const GET: RequestHandler = async ({ params, url, locals }) => {
 	const { provider } = params;
 
-	if (!isOAuthProvider(provider)) {
+	if (!PROVIDER_ID_PATTERN.test(provider)) {
 		return json({ message: 'Unknown provider' }, 404);
 	}
 
@@ -29,6 +29,8 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 		switch (result.error.code) {
 			case 11001:
 				return json({ message: 'This provider is not enabled' }, 400);
+			case 11014:
+				return json({ message: 'Unknown provider' }, 404);
 			case 11010:
 				return json({ message: 'Pass a unique `state` and an S256 PKCE `challenge`' }, 400);
 			default:

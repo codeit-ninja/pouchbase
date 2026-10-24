@@ -1,10 +1,12 @@
 import type { RequestHandler } from './$types';
 
-import { OAUTH_PROVIDERS } from '#lib/auth/oauth-providers.js';
 import { json, preflight } from '#lib/server/api.js';
 
-/** The enabled OAuth providers, so client apps can show their sign-in buttons. */
-export const GET: RequestHandler = async ({ locals }) => {
+/**
+ * The enabled OAuth providers, so client apps can show their sign-in buttons: the id, the label
+ * and the logo (an absolute URL, `null` when the provider's plugin has none).
+ */
+export const GET: RequestHandler = async ({ locals, url }) => {
 	const result = await locals.services.oauthProviders().list();
 
 	if (result.isErr()) {
@@ -14,7 +16,11 @@ export const GET: RequestHandler = async ({ locals }) => {
 	return json(
 		result.value
 			.filter((provider) => provider.enabled)
-			.map(({ provider }) => ({ provider, label: OAUTH_PROVIDERS[provider].label }))
+			.map(({ provider, label, iconUrl }) => ({
+				provider,
+				label,
+				iconUrl: iconUrl ? new URL(iconUrl, url.origin).toString() : null
+			}))
 	);
 };
 

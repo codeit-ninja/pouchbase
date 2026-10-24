@@ -24,6 +24,11 @@ src/lib/server/
 │                           # the app DB has a random name (id and name in settings)
 ├── db/                     # Drizzle schema, client and migrator (throws)
 ├── crypto.ts               # password hashing, tokens (throws)
+├── plugins/                # running plugin server code (throws; used by plugins.service.ts)
+│   ├── runtime.ts          # PluginRuntime, the calls (describe, profile), dispatch, zod schemas
+│   ├── network.ts          # hostMatches/restrictedFetch: the permissions.network allowlist
+│   ├── worker.ts           # the Worker of an installed plugin: entry code, WorkerRuntime
+│   └── embedded.ts         # built-in plugins from /plugins/* (import.meta.glob), InProcessRuntime
 ├── hooks/                  # boot.ts, session.ts, guard.ts → sequence() in src/hooks.server.ts
 └── services/
     ├── api-keys.service.ts # API keys for server-side code (`pbk_…`); every function has one
@@ -42,8 +47,9 @@ src/lib/server/
     ├── install.service.ts
     ├── mail.service.ts     # mail settings and sending (Cloudflare Email Service or SMTP)
     ├── mail-templates.service.ts # email templates with variables, the built-in emails, sending them
-    ├── oauth-providers.service.ts
-    ├── plugins.service.ts  # plugins from the plugin registry: search, install, remove
+    ├── oauth-providers.service.ts # sign-in providers (from plugins: plugin_auth_providers) and their credentials
+    ├── plugins.service.ts  # plugins: registry search, install (Worker deploy, sign-in providers),
+    │                       # remove, built-in plugins, runtimeFor(), asset()
     ├── realtime.service.ts # realtime events: sessions, subscription and view-rule checks for the hubs
     ├── records.service.ts
     ├── sessions.service.ts

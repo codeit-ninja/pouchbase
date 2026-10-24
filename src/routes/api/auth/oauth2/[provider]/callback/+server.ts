@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 
-import { isOAuthProvider } from '#lib/auth/oauth-providers.js';
+import { PROVIDER_ID_PATTERN } from '#lib/auth/oauth-providers.js';
 
 const MESSAGES = {
 	done: 'You are signed in. You can close this window.',
@@ -41,7 +41,7 @@ function page(message: string, status = 200) {
 
 /** The provider redirects the popup here after the user signed in (or declined). */
 export const GET: RequestHandler = async ({ params, url, locals }) => {
-	if (!isOAuthProvider(params.provider)) {
+	if (!PROVIDER_ID_PATTERN.test(params.provider)) {
 		return page(MESSAGES.expired, 404);
 	}
 

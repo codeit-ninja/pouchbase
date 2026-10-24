@@ -22,7 +22,7 @@
 ## Features
 
 - Collections, fields and indexes, managed from the admin interface. A records API is planned.
-- Built-in user management with email and password sign-in and OAuth (Google, GitHub, Microsoft, Discord and Twitch).
+- Built-in user management with email and password sign-in and OAuth (Google, GitHub, Microsoft, Discord and Twitch built in, more through sign-in plugins).
 - Realtime: apps follow changes to records over a WebSocket, filtered by each collection's view rule.
 - A built-in `files` collection for uploads.
 - An install page that creates the databases and the first admin account, or an install from `POUCHBASE_ADMIN_EMAIL` and `POUCHBASE_ADMIN_PASSWORD`.
@@ -197,7 +197,7 @@ Every installation has a built-in `users` collection for the users of **your app
 On the **Authentication** page (sidebar → System) you activate the sign-in methods:
 
 - **Email & password**, optionally with self sign-up and **Require a verified email**: then new users can only sign in after following the link in the verification email (sign-in answers `403` with `code: "email_not_verified"` until then). Set a user's password in the `users` collection.
-- **OAuth**: Google, GitHub, Microsoft, Discord and Twitch. Create an OAuth app at the provider, register the **callback URL** shown in the setup dialog, then enter the client ID and secret.
+- **OAuth**: Google, GitHub, Microsoft, Discord and Twitch (built-in plugins), plus any provider an installed sign-in plugin adds. Create an OAuth app at the provider, register the **callback URL** shown in the setup dialog, then enter the client ID and secret.
 
 ### Mail
 
@@ -214,7 +214,7 @@ Every sign-in returns `{ token, user_id }`; a sign-up returns `{ token, user_id,
 
 | Request                                               | Purpose                                                                                                            |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `GET /api/auth/providers`                             | Active OAuth providers: `[{ "provider": "github", "label": "GitHub" }]`                                            |
+| `GET /api/auth/providers`                             | Active OAuth providers: `[{ "provider": "github", "label": "GitHub", "iconUrl": "https://…/github.svg?v=1.0.0" }]` |
 | `POST /api/auth/password/sign-up`                     | `{ name, email, password }`; `400`/`409` with `issues` per field, `503` without mail when verification is required |
 | `POST /api/auth/password/sign-in`                     | `{ email, password }`; `401` for wrong credentials, `403` until the email is verified (when required)              |
 | `POST /api/auth/password/request-reset`               | `{ email }`; emails a reset link (same answer for unknown addresses)                                               |
@@ -232,6 +232,7 @@ Every sign-in returns `{ token, user_id }`; a sign-up returns `{ token, user_id,
 | `GET /api/realtime?collection=<name>` (WebSocket)     | Live changes to records the view rule allows, see [Realtime](#realtime)                                            |
 | `GET /api/files/<id>`                                 | A file from the `files` collection (public; ids are random)                                                        |
 | `GET /api/types?token=…`                              | TypeScript types of every collection; the URL is on the **Types** page                                             |
+| `GET /api/plugins/<id>/assets/ui/<file>.svg`          | An image of a plugin, e.g. a sign-in provider's logo (public, sandboxed)                                           |
 | `<any method> /api/functions/<name>/<path>`           | Calls a [function](#functions); `401` when it requires sign-in, `404` if none                                      |
 | `POST /api/mail/send`                                 | Sends an [email template](#email-templates); needs an API key (`Bearer pbk_…`)                                     |
 | `GET /api/collections`                                | Every collection with its fields, indexes, API rules and settings; see below                                       |
@@ -387,12 +388,16 @@ Templates are sent with `POST /api/mail/send` (`{ "template", "to", "variables" 
 
 ## Plugins
 
-The **Plugins** page (under System) searches the plugin marketplace and installs, updates and removes plugins. Plugins add field types, dashboard pages and sign-in providers; running them is in development, so installed plugins are stored but don't run yet.
+The **Plugins** page (under System) searches the plugin registry, filters it by category (sign-in providers, field types, pages, integrations, developer tools) and installs, updates and removes plugins; the same plugins can be browsed on [pouchbase.io/plugins](https://pouchbase.io/plugins). Plugins add field types, dashboard pages and sign-in providers. Sign-in providers from plugins work; field types and pages don't run yet.
 
-Plugins are built with [`@pouchbasejs/plugin-sdk`](packages/plugin-sdk), which holds the plugin contract (manifest, bundle format, registry API) and the `pouchbase-plugin` CLI. Installs are checked against the integrity hash from the registry, the manifest rules and the plugin API version. Set `PLUGIN_REGISTRY_URL` to use another registry than the public one, for example the local registry that `pouchbase-plugin dev` runs while you develop a plugin.
+A plugin with server code runs in **its own Worker on your Cloudflare account** (`<instance>-plugin-<id>`), deployed with the same Script Upload API as the functions. Like a function Worker, it answers on its `workers.dev` URL only to requests that carry its secret (so the account needs a `workers.dev` subdomain), and it has no other bindings: it can't reach your data. Before any plugin code runs, the Worker replaces `fetch` (and `WebSocket`) with versions that only reach the HTTPS hosts in the manifest's `permissions.network` (`*.example.com` matches the subdomains of `example.com`, not `example.com` itself) and don't follow redirects. Sign-in providers are registered when the plugin is installed: Pouchbase asks the plugin for the authorize and token URLs, scopes and PKCE setting and does the OAuth redirect and token exchange itself; only the profile lookup runs in the plugin. Provider ids are global, so a plugin can't be installed when another plugin already contributes one of its provider ids.
+
+The first-party plugins in [`plugins/`](plugins) (sign-in with Google, GitHub, Microsoft, Discord and Twitch) are **built in**: they ship with Pouchbase, run inside it with the same `fetch` allowlist, and can't be removed. Installing a plugin with the same id from the registry replaces the built-in one until it is removed again. Provider logos and other images of a plugin are served at `GET /api/plugins/<id>/assets/ui/<file>.svg` (public, sandboxed).
+
+Plugins are built with [`@pouchbasejs/plugin-sdk`](packages/plugin-sdk), which holds the plugin contract (manifest, bundle format, registry API) and the `pouchbase-plugin` CLI. Installs are checked against the integrity hash from the registry, the manifest rules and the plugin API version, and a bundle whose server code still imports modules (such as `cloudflare:sockets`) is refused. Plugin UI can use the dashboard's own components from [`@pouchbasejs/ui`](packages/ui). Set `PLUGIN_REGISTRY_URL` to use another registry than the public one, for example the local registry that `pouchbase-plugin dev` runs while you develop a plugin.
 
 ## License
 
 Pouchbase is licensed under the [GNU Affero General Public License v3.0](LICENSE). Apps that only talk to Pouchbase through its API are not affected by this license; modified versions of Pouchbase that are offered as a network service must make their source code available under the same license.
 
-Plugins are covered by the [Pouchbase Plugin Exception](PLUGIN-EXCEPTION.md): a plugin that only uses the plugin API may be distributed under any license, including a proprietary one. The plugin SDK (`@pouchbasejs/plugin-sdk`, in `packages/plugin-sdk`) and the JavaScript SDK (`@pouchbasejs/js-sdk`, in `packages/js-sdk`) are licensed under the MIT license. The website in `site/` is not open source: all rights reserved.
+Plugins are covered by the [Pouchbase Plugin Exception](PLUGIN-EXCEPTION.md): a plugin that only uses the plugin API may be distributed under any license, including a proprietary one. The plugin SDK (`@pouchbasejs/plugin-sdk`, in `packages/plugin-sdk`), the UI components (`@pouchbasejs/ui`, in `packages/ui`), the JavaScript SDK (`@pouchbasejs/js-sdk`, in `packages/js-sdk`) and the first-party plugins in `plugins/` are licensed under the MIT license. The website in `site/` is not open source: all rights reserved.

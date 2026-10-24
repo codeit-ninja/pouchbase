@@ -81,6 +81,10 @@ export const updateOAuthProvider = form(oauthProviderSchema, async (data, issue)
 			invalid(issue.enabled('Enter a client ID and client secret before enabling'));
 		}
 
+		if (result.error.code === 10004) {
+			invalid('This provider is no longer available: its plugin was removed');
+		}
+
 		error(500, result.error.message);
 	}
 

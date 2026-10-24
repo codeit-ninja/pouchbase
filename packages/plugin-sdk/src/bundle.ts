@@ -9,8 +9,8 @@ import { manifestSchema, UI_DIR, type ManifestIssue, type PluginManifest } from 
  * - The server code is bundled into a single ES module, `server.js`, with no imports left.
  * - UI files stay source: the host compiles the `.svelte` files with its own Svelte compiler on
  *   install, so they always match the Svelte version of the dashboard. TypeScript modules in `ui/`
- *   are already turned into JavaScript, so the bundle only has `.svelte`, `.js`, `.css` and `.json`
- *   files there.
+ *   are already turned into JavaScript, so the bundle only has `.svelte`, `.js`, `.css`, `.json`
+ *   and `.svg` files there.
  */
 
 export const BUNDLE_FORMAT = 'pouchbase-plugin-bundle';
@@ -24,8 +24,22 @@ export const MAX_BUNDLE_SIZE = 1024 * 1024;
 /** Path of the server code in a bundle. */
 export const SERVER_FILE = 'server.js';
 
+/**
+ * Imports left in the server code: static imports and re-exports with a specifier, and dynamic
+ * `import()`. `pouchbase-plugin build` never leaves any, so a bundle that has them was built by hand,
+ * e.g. to reach `cloudflare:sockets` or `cloudflare:workers` past the network allowlist.
+ */
+const SERVER_IMPORT = /\bimport\s*\(|\bimport\s*["'`]|\b(?:import|export)\b[^;"'`]*?\bfrom\s*["'`]/;
+
+/** Problems with the server code of a bundle: it must be one ES module without imports. */
+export function serverCodeIssues(code: string): ManifestIssue[] {
+	return SERVER_IMPORT.test(code)
+		? [{ path: `files.${SERVER_FILE}`, message: 'The server code must not import other modules' }]
+		: [];
+}
+
 /** File types allowed in the `ui/` directory of a bundle. */
-const UI_FILE = /\.(?:svelte|js|css|json)$/;
+const UI_FILE = /\.(?:svelte|js|css|json|svg)$/;
 
 export const bundleSchema = z
 	.object({
@@ -48,6 +62,14 @@ export const bundleSchema = z
 			}
 		}
 
+		const server = files[SERVER_FILE];
+
+		if (server !== undefined) {
+			for (const issue of serverCodeIssues(server)) {
+				ctx.addIssue({ code: 'custom', path: ['files', SERVER_FILE], message: issue.message });
+			}
+		}
+
 		if (manifest.server !== undefined && manifest.server !== SERVER_FILE) {
 			ctx.addIssue({
 				code: 'custom',
@@ -59,7 +81,8 @@ export const bundleSchema = z
 		const required = [
 			...(manifest.server ? [manifest.server] : []),
 			...manifest.contributes.fields.flatMap((field) => [field.input, field.cell ?? []].flat()),
-			...manifest.contributes.pages.map((page) => page.component)
+			...manifest.contributes.pages.map((page) => page.component),
+			...manifest.contributes.authProviders.flatMap((provider) => provider.icon ?? [])
 		];
 
 		for (const path of required) {

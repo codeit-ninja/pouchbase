@@ -8,17 +8,18 @@ import { PLUGIN_ID_PATTERN, permissionsSchema } from './manifest.js';
  * `pouchbase-plugin publish` uploads them. Any server that implements these endpoints can act as
  * a registry; `pouchbase-plugin dev` runs a local one.
  *
- * | Method | Path                                         | Response                         |
- * | ------ | -------------------------------------------- | -------------------------------- |
- * | GET    | `/v1/plugins?q=&page=&perPage=&apiVersion=`  | `PluginList`                     |
- * | GET    | `/v1/plugins/:id`                            | `PluginDetails`, 404             |
- * | GET    | `/v1/plugins/:id/versions/:version`          | `PluginVersion`, 404             |
- * | GET    | `PluginVersion.bundleUrl`                    | the bundle (`application/json`)  |
- * | POST   | `/v1/plugins/:id/versions` (bundle as body)  | 201 `PluginVersion`, 401, 409, 422 |
+ * | Method | Path                                                  | Response                           |
+ * | ------ | ----------------------------------------------------- | ---------------------------------- |
+ * | GET    | `/v1/plugins?q=&category=&page=&perPage=&apiVersion=` | `PluginList`                       |
+ * | GET    | `/v1/plugins/:id`                                     | `PluginDetails`, 404               |
+ * | GET    | `/v1/plugins/:id/versions/:version`                   | `PluginVersion`, 404               |
+ * | GET    | `PluginVersion.bundleUrl`                             | the bundle (`application/json`)    |
+ * | POST   | `/v1/plugins/:id/versions` (bundle as body)           | 201 `PluginVersion`, 401, 409, 422 |
  *
- * `:version` is a semver version or `latest`; with `?apiVersion=` (repeatable), `latest` is the
- * newest version with one of those API versions. Errors have a `RegistryErrorBody`. Publishing
- * needs `Authorization: Bearer <token>`.
+ * `?category=` only lists plugins in that category (see `PLUGIN_CATEGORIES`). `:version` is a
+ * semver version or `latest`; with `?apiVersion=` (repeatable), `latest` is the newest version
+ * with one of those API versions. Errors have a `RegistryErrorBody`. Publishing needs
+ * `Authorization: Bearer <token>`.
  */
 
 export const REGISTRY_API_PREFIX = '/v1';
@@ -39,6 +40,8 @@ export const pluginSummarySchema = z.object({
 	/** Square image shown in the marketplace. */
 	iconUrl: z.url().nullable(),
 	keywords: z.array(z.string()),
+	/** See `effectiveCategories`; missing from older registries. */
+	categories: z.array(z.string()).default([]),
 	downloads: z.number().int().nonnegative(),
 	/** Reviewed by the Pouchbase team. */
 	verified: z.boolean(),
@@ -99,6 +102,8 @@ export type RegistryErrorBody = z.output<typeof registryErrorBodySchema>;
 
 export type SearchOptions = {
 	query?: string;
+	/** Only plugins in this category, e.g. `auth`. */
+	category?: string;
 	page?: number;
 	perPage?: number;
 	/** Only plugins with one of these API versions, usually `SUPPORTED_API_VERSIONS`. */
@@ -191,11 +196,15 @@ export function createRegistryClient(options: RegistryClientOptions = {}): Regis
 	}
 
 	return {
-		async search({ query, page, perPage, apiVersions } = {}) {
+		async search({ query, category, page, perPage, apiVersions } = {}) {
 			const params = new URLSearchParams();
 
 			if (query) {
 				params.set('q', query);
+			}
+
+			if (category) {
+				params.set('category', category);
 			}
 
 			if (page) {

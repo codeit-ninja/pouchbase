@@ -6,17 +6,17 @@
 	import * as Form from '#lib/components/ui/form/index.js';
 	import * as Icon from '#lib/components/ui/icon/index.js';
 	import * as Copy from '#lib/components/ui/inputs/copy/index.js';
-	import {
-		OAUTH_PROVIDERS,
-		oauthCallbackPath,
-		type OAuthProvider
-	} from '#lib/auth/oauth-providers.js';
+	import * as ProviderIcon from '#lib/components/ui/provider-icon/index.js';
+	import { oauthCallbackPath, type OAuthProvider } from '#lib/auth/oauth-providers.js';
 	import { oauthProviderSchema } from '#lib/schemas/settings.js';
 	import { updateOAuthProvider } from './auth-settings.remote';
 
 	type Props = {
 		provider: {
 			provider: OAuthProvider;
+			label: string;
+			consoleUrl: string | null;
+			iconUrl: string | null;
 			enabled: boolean;
 			clientId: string;
 			hasSecret: boolean;
@@ -25,7 +25,6 @@
 
 	let { provider, close }: Props = $props();
 
-	const info = $derived(OAUTH_PROVIDERS[provider.provider]);
 	const form = $derived(updateOAuthProvider.for(provider.provider).preflight(oauthProviderSchema));
 	// Same URL the OAuth endpoints send to the provider (`AuthService.callbackUrl`).
 	const callbackUrl = $derived(
@@ -37,18 +36,18 @@
 <Dialog.Content size="md">
 	<Dialog.Header>
 		<Dialog.Title class="flex items-center gap-2">
-			<Icon.Root icon={info.icon} class="size-5" />
-			{provider.enabled ? `Configure ${info.label}` : `Set up ${info.label}`}
+			<ProviderIcon.Root src={provider.iconUrl} fallback="lucide:log-in" class="size-5" />
+			{provider.enabled ? `Configure ${provider.label}` : `Set up ${provider.label}`}
 		</Dialog.Title>
 		<Dialog.Description>
-			Create an OAuth app in the {info.label} developer console, register the callback URL below and paste
-			its client ID and secret here.
+			Create an OAuth app in the {provider.label} developer console, register the callback URL below and
+			paste its client ID and secret here.
 		</Dialog.Description>
 	</Dialog.Header>
 
 	<Form.Root
 		{form}
-		success="{info.label} settings saved"
+		success="{provider.label} settings saved"
 		enhance={async (instance) => {
 			if (await instance.submit()) {
 				close();
@@ -83,22 +82,24 @@
 			<Form.Checkbox defaultChecked />
 			<Form.Label>Active</Form.Label>
 			<Form.Description class="w-full pl-6">
-				Users can sign in and sign up with {info.label}.
+				Users can sign in and sign up with {provider.label}.
 			</Form.Description>
 			<Form.Errors class="w-full pl-6" />
 		</Form.Field>
 
-		<Dialog.Footer class="sm:justify-between">
-			<Button.Root
-				href={info.consoleUrl}
-				target="_blank"
-				rel="noreferrer"
-				variant="ghost"
-				class="sm:-ml-4"
-			>
-				<Icon.Root icon="lucide:external-link" />
-				Developer console
-			</Button.Root>
+		<Dialog.Footer class={provider.consoleUrl ? 'sm:justify-between' : undefined}>
+			{#if provider.consoleUrl}
+				<Button.Root
+					href={provider.consoleUrl}
+					target="_blank"
+					rel="noreferrer"
+					variant="ghost"
+					class="sm:-ml-4"
+				>
+					<Icon.Root icon="lucide:external-link" />
+					Developer console
+				</Button.Root>
+			{/if}
 
 			<div class="flex flex-col-reverse gap-2 sm:flex-row">
 				<Dialog.Close>Cancel</Dialog.Close>

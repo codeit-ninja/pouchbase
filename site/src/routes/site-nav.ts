@@ -69,6 +69,7 @@ export const navigation: (NavGroup | NavLink)[] = [
 			}
 		]
 	},
+	{ label: 'Plugins', href: resolve('/plugins') },
 	{ label: 'Docs', href: resolve('/docs') }
 ];
 

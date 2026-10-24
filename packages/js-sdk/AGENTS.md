@@ -20,7 +20,7 @@ The SDK is a workspace package in the Pouchbase repository; the app is at the re
 | Pouchbase JS SDK | `.` (this folder) | Client for the public API, for browsers, Node, Deno, Bun and Workers            |
 
 - **The app is the source of truth.** The public API lives in `../../src/routes/api/**/+server.ts` (helpers in `../../src/lib/server/api.ts`) and is documented in the _Public API_ section of `../../README.md`. Request bodies, response shapes, status codes and error messages in the SDK must match those files exactly; check them instead of guessing.
-- Shared constants (such as the OAuth providers in `../../src/lib/auth/oauth-providers.ts`) are mirrored in `src/types.ts`; keep them in sync when the app changes.
+- Shared constants are mirrored in `src/types.ts`; keep them in sync when the app changes. Sign-in providers come from plugins, so `OAuthProvider` is any id; `KNOWN_OAUTH_PROVIDERS` lists the built-in ones (`../../plugins/auth-*`).
 - Only call endpoints under `/api/`. Everything else in the app (remote functions in `*.remote.ts`, admin pages) is internal and can change at any time.
 - When the API gains an endpoint, add it to the SDK with a test, and update the docs in `../../site` when they cover the SDK, in the same change.
 - The app and the site have their own `AGENTS.md` and conventions; follow those when a change touches them.
@@ -32,7 +32,7 @@ Sign-ins return `{ token, user_id }`; the token is a JWT (HS256, 7 days) sent as
 | Request                                               | SDK                                  |
 | ----------------------------------------------------- | ------------------------------------ |
 | `GET /api/health`                                     | `pb.health()`                        |
-| `GET /api/auth/providers`                             | `pb.auth.providers()`                |
+| `GET /api/auth/providers` (`[{ provider, label, iconUrl }]`) | `pb.auth.providers()`                |
 | `POST /api/auth/password/sign-up`                     | `pb.auth.signUp()`                   |
 | `POST /api/auth/password/sign-in`                     | `pb.auth.signIn()`                   |
 | `POST /api/auth/password/request-reset`               | `pb.auth.requestPasswordReset()`     |
@@ -51,6 +51,7 @@ Sign-ins return `{ token, user_id }`; the token is a JWT (HS256, 7 days) sent as
 | `GET /api/files/<id>`                                 | `pb.files.url()`                     |
 | `<method> /api/functions/<name>/<path>`               | `pb.functions.invoke()`              |
 | `POST /api/mail/send` (API key as `Bearer pbk_…`)    | `pb.mail.send()` (needs `apiKey`)    |
+| `GET /api/plugins/<id>/assets/ui/<file>.svg` (public image, not JSON) | not wrapped: used as an image URL |
 | Records API with a `service` API key (`Bearer pbk_…`; API rules skipped, other keys `403`) | `pb.asService().db.<name>…` (needs `apiKey`) |
 | `GET /api/collections` (service API key)              | `pb.collections.list()` (needs `apiKey`) |
 | `GET /api/collections/<name>` (service API key)       | `pb.collections.find()`              |

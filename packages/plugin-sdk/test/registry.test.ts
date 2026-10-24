@@ -98,4 +98,40 @@ describe('registry client', () => {
 		await expect(client.get('missing')).resolves.toBe(null);
 		await expect(client.search()).rejects.toBeInstanceOf(RegistryError);
 	});
+
+	it('filters by category and defaults missing categories to none', async () => {
+		let requested = '';
+		const client = createRegistryClient({
+			url: 'https://registry.test',
+			fetch: async (input) => {
+				requested = String(input);
+
+				return Response.json({
+					items: [
+						{
+							id: 'hello',
+							name: 'Hello',
+							description: 'Says hello.',
+							version: '1.0.0',
+							apiVersion: 1,
+							author: null,
+							iconUrl: null,
+							keywords: [],
+							downloads: 0,
+							verified: false,
+							updatedAt: new Date().toISOString()
+						}
+					],
+					page: 1,
+					perPage: 20,
+					total: 1
+				});
+			}
+		});
+
+		const list = await client.search({ query: 'hello', category: 'auth' });
+
+		expect(new URL(requested).searchParams.get('category')).toBe('auth');
+		expect(list.items[0]?.categories).toEqual([]);
+	});
 });

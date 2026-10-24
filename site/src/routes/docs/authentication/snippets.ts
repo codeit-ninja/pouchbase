@@ -44,7 +44,8 @@ pb.auth.signOut();`
 export const oauth = snippet(
 	'typescript',
 	`
-const providers = await pb.auth.providers(); // [{ provider: 'github', label: 'GitHub' }, …]
+// [{ provider: 'github', label: 'GitHub', iconUrl: 'https://…/github.svg?v=1.0.0' }, …]
+const providers = await pb.auth.providers();
 
 button.addEventListener('click', async () => {
 	try {

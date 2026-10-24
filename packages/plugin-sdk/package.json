@@ -16,6 +16,9 @@
 		"sdk"
 	],
 	"sideEffects": false,
+	"bin": {
+		"pouchbase-plugin": "./dist/cli.js"
+	},
 	"files": [
 		"dist"
 	],
@@ -41,9 +44,6 @@
 				"default": "./dist/ui.js"
 			},
 			"./package.json": "./package.json"
-		},
-		"bin": {
-			"pouchbase-plugin": "./dist/cli.js"
 		}
 	},
 	"engines": {

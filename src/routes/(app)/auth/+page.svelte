@@ -1,15 +1,17 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import * as Badge from '#lib/components/ui/badge/index.js';
 	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
 	import * as Button from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Icon from '#lib/components/ui/icon/index.js';
+	import * as Link from '#lib/components/ui/link/index.js';
 	import * as Page from '#lib/components/ui/page/index.js';
+	import * as ProviderIcon from '#lib/components/ui/provider-icon/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Tile from '#lib/components/ui/tile/index.js';
 	import * as Topbar from '#lib/components/ui/topbar/index.js';
-	import { OAUTH_PROVIDERS } from '#lib/auth/oauth-providers.js';
 	import { getAuthSettings } from './auth-settings.remote';
 	import PasswordDialog from './password-dialog.svelte';
 	import ProviderDialog from './provider-dialog.svelte';
@@ -18,14 +20,25 @@
 
 	type OAuthSettings = (typeof settings.providers)[number];
 
-	/** Email & password and the OAuth providers, as tiles. */
+	/**
+	 * Email & password and the OAuth providers, as tiles. The providers come from sign-in plugins,
+	 * with their own logo (`iconUrl`); `icon` is the fallback.
+	 */
 	type Method =
-		| { kind: 'password'; key: string; label: string; icon: string; active: boolean }
+		| {
+				kind: 'password';
+				key: string;
+				label: string;
+				icon: string;
+				iconUrl: null;
+				active: boolean;
+		  }
 		| {
 				kind: 'oauth';
 				key: string;
 				label: string;
 				icon: string;
+				iconUrl: string | null;
 				active: boolean;
 				provider: OAuthSettings;
 		  };
@@ -36,13 +49,15 @@
 			key: 'password',
 			label: 'Email & password',
 			icon: 'lucide:key-round',
+			iconUrl: null,
 			active: settings.password.enabled
 		},
 		...settings.providers.map((provider) => ({
 			kind: 'oauth' as const,
 			key: provider.provider,
-			label: OAUTH_PROVIDERS[provider.provider].label,
-			icon: OAUTH_PROVIDERS[provider.provider].icon,
+			label: provider.label,
+			icon: 'lucide:log-in',
+			iconUrl: provider.iconUrl,
 			active: provider.enabled,
 			provider
 		}))
@@ -143,7 +158,9 @@
 					{#each active as method (method.key)}
 						<Tile.Root>
 							<Tile.Header>
-								<Tile.Icon><Icon.Root icon={method.icon} /></Tile.Icon>
+								<Tile.Icon>
+									<ProviderIcon.Root src={method.iconUrl} fallback={method.icon} class="size-5" />
+								</Tile.Icon>
 								<Tile.Title>{method.label}</Tile.Title>
 								<Badge.Root class="bg-emerald-50 text-emerald-700">Active</Badge.Root>
 							</Tile.Header>
@@ -173,14 +190,25 @@
 		</section>
 
 		<section class="flex flex-col gap-4" aria-labelledby="available-methods">
-			<h2 id="available-methods" class="text-sm font-semibold text-zinc-900">Available</h2>
+			<div class="flex flex-col gap-1">
+				<h2 id="available-methods" class="text-sm font-semibold text-zinc-900">Available</h2>
+				<p class="text-sm text-zinc-500">
+					Sign-in providers come from plugins. Google, GitHub, Microsoft, Discord and Twitch are
+					built in; install more from the
+					<Link.Root href={resolve('/(app)/plugins')} class="text-zinc-900 underline"
+						>Plugins page</Link.Root
+					>.
+				</p>
+			</div>
 
 			{#if available.length}
 				<Tile.Grid>
 					{#each available as method (method.key)}
 						<Tile.Root>
 							<Tile.Header>
-								<Tile.Icon><Icon.Root icon={method.icon} /></Tile.Icon>
+								<Tile.Icon>
+									<ProviderIcon.Root src={method.iconUrl} fallback={method.icon} class="size-5" />
+								</Tile.Icon>
 								<Tile.Title>{method.label}</Tile.Title>
 								{#if method.kind === 'oauth' && method.provider.clientId}
 									<Badge.Root variant="outline">Inactive</Badge.Root>

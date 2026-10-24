@@ -5,7 +5,6 @@
 import type { FieldProperty, PlanStep, PlanWarning } from './diff';
 import type { SnapshotSettingKey } from './snapshot';
 
-import { OAUTH_PROVIDERS } from '#lib/auth/oauth-providers.js';
 import { FIELD_TYPES } from '#lib/fields/field-types.js';
 
 const SETTING_LABELS: Record<SnapshotSettingKey, string> = {
@@ -27,8 +26,9 @@ const FIELD_CHANGES: Record<Exclude<FieldProperty, 'name' | 'type'>, string> = {
 	options: 'options'
 };
 
-function provider(id: string) {
-	return OAUTH_PROVIDERS[id as keyof typeof OAUTH_PROVIDERS]?.label ?? id;
+/** Plans made before sign-in providers were plugins have only the id. */
+function provider(item: { provider: string; label?: string }) {
+	return item.label ?? item.provider;
 }
 
 function fieldType(type: string) {
@@ -100,7 +100,7 @@ export function describeStep(step: PlanStep): string {
 		case 'setting.set':
 			return `Set the ${SETTING_LABELS[step.key]} from ${value(step.from)} to ${value(step.to)}`;
 		case 'oauth.update':
-			return `${step.enabled ? 'Turn on' : 'Update'} sign-in with ${provider(step.provider)}${step.enabled ? '' : ' (off)'}`;
+			return `${step.enabled ? 'Turn on' : 'Update'} sign-in with ${provider(step)}${step.enabled ? '' : ' (off)'}`;
 	}
 }
 
@@ -109,7 +109,11 @@ export function describeWarning(warning: PlanWarning): string {
 		case 'function.secret':
 			return `Function ${warning.function} uses the secret ${warning.secret}: add it on the target.`;
 		case 'oauth.secret':
-			return `Sign-in with ${provider(warning.provider)} needs its client secret on the target; it stays off until then.`;
+			return `Sign-in with ${provider(warning)} needs its client secret on the target; it stays off until then.`;
+		case 'oauth.plugin':
+			return warning.pluginId
+				? `Sign-in with ${provider(warning)} needs the plugin ${warning.pluginId} on the target; it is left out.`
+				: `Sign-in with ${provider(warning)} isn't available on the target; it is left out.`;
 		case 'setting.secret':
 			return 'Mail is sent over SMTP: enter the SMTP password on the target.';
 		case 'plugin.api':
