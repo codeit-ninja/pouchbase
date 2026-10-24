@@ -25,6 +25,27 @@ you in another language.
 4. Components that are specific to one route (e.g. a wizard step) live next to that route,
    but they are still built out of `ui` components.
 
+### Where a component lives: `@pouchbasejs/ui` or the app
+
+- **Primitives** live in the workspace package `packages/ui` (`@pouchbasejs/ui`, MIT), so plugins
+  can use the same components: `badge`, `button`, `callout`, `card`, `empty`, `icon`, `link`,
+  `meter`, `progress`, `scroll-area`, `segmented`, `skeleton`, `spinner`, `swatch`, `table`,
+  `thumbnail`, `tile`, `tooltip` and `inputs/{checkbox,input,select,slider,textarea}`. Their
+  sources are in `packages/ui/src/components/<name>/`.
+- The app keeps a shim for each of them, `src/lib/components/ui/<name>/index.ts` =
+  `export * from '@pouchbasejs/ui/<name>';`, so app code always imports
+  `#lib/components/ui/<name>/index.js` (never a part file such as `button-root.svelte`; import
+  types such as `Variant` or `Item` from the `index`).
+- A package component may only import `svelte`, `svelte/*`, `bits-ui`, `@iconify/svelte` and other
+  package components (relative imports with an explicit `/index.js` or `.js`). Nothing from `$app`,
+  `$lib`, `#lib`, `virtual:` modules or app code. A new primitive that fits these rules goes in
+  `packages/ui` (add it to `src/index.ts` and the README there, add a shim in the app, and a
+  changeset for `@pouchbasejs/ui`); its names and props are part of the plugin API, so changes
+  are additive only.
+- **Composites and everything app-specific** stay in `src/lib/components/ui/`: `form`, `dialog`,
+  `sheet`, `toast`, `data-grid`, `navigation`, `sidebar`, `copy-button`, `inputs/{copy,code,file,
+  rich-text,email-editor,...}` and anything that needs remote functions, `$app` or `#lib`.
+
 ## 3. Compound structure
 
 Every component is a set of parts exported from an `index.ts` and used through a namespace import:
@@ -160,12 +181,12 @@ setStepsContext({
   with utilities.
 - Neutral palette is `zinc`; errors use `red`. Keep focus states visible (`focus-visible:`).
 - **Control height:** buttons, inputs and every other form control use `h-control` (theme token
-  `--spacing-control` in `src/routes/layout.css`), never a hard-coded `h-10`, so they always line
+  `--spacing-control` in `packages/ui/src/theme.css`, imported by `src/routes/layout.css`), never a hard-coded `h-10`, so they always line
   up (32px). Rows in lists and tables (data grid cells and heads, navigation links) use `h-row`
   (`--spacing-row`, 40px) instead. Every control has a border (`border-transparent` when it shouldn't be visible) so the box
   model is identical.
 - **Pointer cursor:** every clickable element shows `cursor: pointer`. The base layer in
-  `layout.css` covers native elements (`button`, `a[href]`, `[role='button']`, `label[for]`,
+  `@pouchbasejs/ui/theme.css` covers native elements (`button`, `a[href]`, `[role='button']`, `label[for]`,
   `select`, checkboxes, ...); custom clickable elements (e.g. a clickable card or row) must add
   `cursor-pointer` themselves. Disabled controls use `cursor-not-allowed`, never
   `pointer-events-none`.
@@ -186,13 +207,15 @@ setStepsContext({
   <Icon.Root icon="lucide:trash-2" label="Delete" />
   ```
 
-- The Vite plugin in `vite/iconify.ts` scans `src` for these strings and bundles only the icons in
-  use, so icons render during SSR and are never fetched from the Iconify API. Because of that the
+- The `iconify` Vite plugin from `@pouchbasejs/ui/vite` (`packages/ui/src/vite/iconify.ts`) scans
+  `src` and the package's components for these strings and bundles only the icons in use, as
+  `virtual:iconify`, which `src/routes/+layout.svelte` imports once. So icons render during SSR and
+  are never fetched from the Iconify API. Because of that the
   name must appear literally in the source: no `icon={`lucide:${name}`}`.
 - The default set is `lucide`. To use another set, install `@iconify-json/<set>` and add it to
   `iconify({ sets: [...] })` in `vite.config.ts`.
 - Icons are decorative (`aria-hidden`) unless you pass `label`.
-- Custom icons are registered with `addIcon` (see `spinner/spinner-icon.ts`: `gg:spinner-alt`
+- Custom icons are registered with `addIcon` (see `packages/ui/src/components/spinner/spinner-icon.ts`: `gg:spinner-alt`
   redrawn with rounded ends).
 
 ## 10. Async actions show a spinner
@@ -205,7 +228,8 @@ setStepsContext({
 
 ## 11. Checklist before you finish
 
-- [ ] Searched `src/lib/components/ui/` first; created a component if nothing fit.
+- [ ] Searched `src/lib/components/ui/` first; created a component if nothing fit (primitives in
+      `packages/ui` with a shim, composites in the app).
 - [ ] Compound structure with `index.ts` and namespace import.
 - [ ] All new files lowercase kebab-case, prefixed with the component name.
 - [ ] All text and comments in English.

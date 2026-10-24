@@ -28,6 +28,10 @@
 		"changeset": "changeset",
 		"changeset:version": "changeset version",
 		"release": "node scripts/publish-packages.mjs",
+		"release:plugins": "pnpm --filter @pouchbasejs/plugin-sdk build && node scripts/publish-plugins.mjs",
+		"plugins:validate": "pnpm --filter @pouchbasejs/plugin-sdk build && pnpm --filter \"./plugins/*\" validate",
+		"plugins:build": "pnpm --filter @pouchbasejs/plugin-sdk build && pnpm --filter \"./plugins/*\" build",
+		"plugins:test": "pnpm --filter \"./plugins/*\" --workspace-concurrency=1 test",
 		"test": "vitest run"
 	},
 	"devDependencies": {
@@ -37,11 +41,10 @@
 		"@iconify-json/logos": "^1.2.17",
 		"@iconify-json/lucide": "^1.2.147",
 		"@iconify/svelte": "^5.2.3",
-		"@iconify/types": "^2.0.0",
-		"@iconify/utils": "^3.1.7",
 		"@internationalized/date": "^3.12.4",
 		"@pouchbasejs/js-sdk": "workspace:*",
 		"@pouchbasejs/plugin-sdk": "workspace:*",
+		"@pouchbasejs/ui": "workspace:*",
 		"@sveltejs/adapter-cloudflare": "^8.0.1",
 		"@sveltejs/adapter-node": "^6.0.0",
 		"@sveltejs/kit": "^3.1.0",

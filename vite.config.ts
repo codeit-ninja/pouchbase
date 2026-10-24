@@ -2,12 +2,12 @@ import type { Target } from './vite/platform.ts';
 
 import { icons as lucide } from '@iconify-json/lucide';
 import { icons as logos } from '@iconify-json/logos';
+import { iconify } from '@pouchbasejs/ui/vite';
 import tailwindcss from '@tailwindcss/vite';
 import cloudflare from '@sveltejs/adapter-cloudflare';
 import node from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, loadEnv } from 'vite';
-import { iconify } from './vite/iconify.ts';
 import { platform } from './vite/platform.ts';
 import { realtime } from './vite/realtime.ts';
 

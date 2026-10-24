@@ -17,7 +17,7 @@
 </script>
 
 <script lang="ts">
-	import * as Tooltip from '../tooltip';
+	import * as Tooltip from '../tooltip/index.js';
 
 	let { src, preview, alt = '', size = 'md', class: className, children }: Props = $props();
 

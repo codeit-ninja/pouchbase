@@ -27,5 +27,9 @@ vite.config.ts.timestamp-*
 # Single binaries (`pnpm build:binary`)
 /dist
 
-# Built packages
+# Built packages and plugin bundles
 packages/*/dist
+plugins/*/dist
+
+# Temporary output of `svelte-package` (packages/ui)
+packages/*/.svelte-kit

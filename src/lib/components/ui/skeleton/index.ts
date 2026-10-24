@@ -1,1 +1,1 @@
-export { default as Root } from './skeleton-root.svelte';
+export * from '@pouchbasejs/ui/skeleton';

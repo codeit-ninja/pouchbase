@@ -1,1 +1,1 @@
-export { default as Root } from './icon-root.svelte';
+export * from '@pouchbasejs/ui/icon';

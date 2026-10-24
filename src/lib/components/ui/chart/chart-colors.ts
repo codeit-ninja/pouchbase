@@ -1,7 +1,7 @@
 /**
  * Series colours, assigned in a fixed order by the caller: `primary` for the first series,
  * `secondary` for the second, `tertiary` for the third. `danger` is reserved for errors and
- * `neutral` for an "other" remainder. The chart hues are theme tokens in `src/routes/layout.css`.
+ * `neutral` for an "other" remainder. The chart hues are theme tokens in `packages/ui/src/theme.css`.
  */
 export type SeriesColor = 'primary' | 'secondary' | 'tertiary' | 'danger' | 'neutral';
 

@@ -7,10 +7,12 @@ This repository holds the app (at the root) and its workspace packages, each wit
 | `.`                   | The app (SvelteKit on Cloudflare Workers or Node) and the API  | AGPL-3.0            |
 | `packages/plugin-sdk` | `@pouchbasejs/plugin-sdk`, the plugin contract and CLI         | MIT                 |
 | `packages/js-sdk`     | `@pouchbasejs/js-sdk`, the TypeScript SDK for the public API   | MIT                 |
+| `packages/ui`         | `@pouchbasejs/ui`, the dashboard's Svelte UI primitives        | MIT                 |
+| `plugins/*`           | First-party plugins (`auth-google`, `auth-github`, ...)        | MIT                 |
 | `site`                | pouchbase.io, the marketing site and docs                      | All rights reserved |
 | `test-app`            | `pouchbase-test`, a test app on Pouchbase and the JS SDK       | Private             |
 
-Run a package's scripts from the root with `pnpm --filter <name> <script>` (`pouchbase-site`, `pouchbase-test`, `@pouchbasejs/js-sdk`, `@pouchbasejs/plugin-sdk`). There is one lockfile, at the root.
+Run a package's scripts from the root with `pnpm --filter <name> <script>` (`pouchbase-site`, `pouchbase-test`, `@pouchbasejs/js-sdk`, `@pouchbasejs/plugin-sdk`, `@pouchbasejs/ui`, `@pouchbase-plugins/<id>`; all plugins with `pnpm plugins:test|validate|build`). There is one lockfile, at the root.
 
 ## Project Configuration
 
@@ -32,11 +34,12 @@ Everything in this project is **English**: code, identifiers, comments, UI text,
 
 Before writing or editing any `.svelte` file, load the **`pouchbase-components`** skill (`.claude/skills/pouchbase-components/SKILL.md`). In short:
 
-- Reuse what exists in `src/lib/components/ui/`; if nothing fits, **always** create a reusable component there instead of inline markup.
-- Primitive controls are standalone (`ui/button/`, input types under `ui/inputs/<type>/`); composite components like `Form` wrap them.
+- Reuse what exists in `src/lib/components/ui/`; if nothing fits, **always** create a reusable component instead of inline markup.
+- Primitives (button, icon, inputs, card, table, tooltip, ...) live in the workspace package `packages/ui` (`@pouchbasejs/ui`, MIT), which plugins can use too; `src/lib/components/ui/<name>/index.ts` re-exports them, so the app keeps importing `#lib/components/ui/<name>/index.js`. A new primitive that only needs `svelte`, `bits-ui`, `@iconify/svelte` and other primitives goes in `packages/ui` (with a shim); anything that needs the app (`$app`, `#lib`, remote functions, toasts, editors) and composites stay in `src/lib/components/ui/`.
+- Primitive controls are standalone (`button/`, input types under `inputs/<type>/`); composite components like `Form` wrap them.
 - Compound structure with an `index.ts` and a namespace import: `<Form.Root>`, `<Form.Field>`, `<Form.Label>`, `<Form.Input>`, `<Form.Errors>`, `<Form.Submit>`.
 - File names are lowercase kebab-case, prefixed with the component name: `form-root.svelte`, `form-description.svelte`, `form-submit.svelte`, `form-context.ts`.
-- Icons always come from Iconify through `<Icon.Root icon="lucide:plus" />` (literal names, bundled by `vite/iconify.ts`); never `@lucide/svelte` or other icon component libraries.
+- Icons always come from Iconify through `<Icon.Root icon="lucide:plus" />` (literal names, bundled by the `iconify` Vite plugin from `@pouchbasejs/ui/vite`); never `@lucide/svelte` or other icon component libraries.
 - Buttons that trigger async actions always show the spinner (`Form.Submit` and async `onclick` do this automatically; otherwise pass `loading`).
 - Forms always use remote functions (`form(...)` in a `*.remote.ts`) with a Zod schema from `src/lib/schemas/`.
 
@@ -60,16 +63,17 @@ The plugin contract lives in the workspace package `packages/plugin-sdk` (`@pouc
 - Contract changes get a changeset for `@pouchbasejs/plugin-sdk` as well as for `pouchbase` when the app changes.
 - Plugins may use any license under `PLUGIN-EXCEPTION.md`; keep the SDK free of AGPL code.
 - Run the SDK checks with `pnpm --filter @pouchbasejs/plugin-sdk check` and `... test`.
+- The first-party plugins in `plugins/*` (see `plugins/AGENTS.md`) use only the public contract; when the contract changes, run `pnpm plugins:test` and `pnpm plugins:validate`.
 
 ## Changesets
 
 Versioning and the changelog are managed with [Changesets](https://changesets.dev) (`.changeset/`, see its README).
 
-- Every new feature, bug fix or breaking change gets a changeset: run `pnpm changeset` or add a Markdown file to `.changeset/` by hand, with frontmatter `'pouchbase': patch | minor | major` (or `'@pouchbasejs/js-sdk'` / `'@pouchbasejs/plugin-sdk'` / `'pouchbase-site'` for the packages and the site) and a one-line, user-facing description in English.
+- Every new feature, bug fix or breaking change gets a changeset: run `pnpm changeset` or add a Markdown file to `.changeset/` by hand, with frontmatter `'pouchbase': patch | minor | major` (or `'@pouchbasejs/js-sdk'` / `'@pouchbasejs/plugin-sdk'` / `'@pouchbasejs/ui'` / `'pouchbase-site'` for the packages and the site) and a one-line, user-facing description in English.
 - Create the changeset in the same change as the code, as part of the work, not afterwards.
 - Do **not** create a separate changeset when the change belongs to work that already has an unreleased changeset in `.changeset/` (e.g. fixing a bug in a feature that is still pending): update that changeset's description if it no longer covers the change.
 - Bump types: `patch` for bug fixes and small improvements, `minor` for new features, `major` for breaking changes. Internal refactors, docs and tooling changes need no changeset.
-- Never run `pnpm changeset:version` unless asked; the Release workflow does it in the Version Packages pull request, and merging that pull request releases the version: the app as a `v<version>` GitHub release and a deploy to Cloudflare, the SDKs on npm and the site as a deploy to Cloudflare (tag `site-v<version>`). A push without a version bump builds and deploys nothing, so a site change only goes live with a changeset for `pouchbase-site`.
+- Never run `pnpm changeset:version` unless asked; the Release workflow does it in the Version Packages pull request, and merging that pull request releases the version: the app as a `v<version>` GitHub release and a deploy to Cloudflare, the SDKs on npm, the site as a deploy to Cloudflare (tag `site-v<version>`) and the first-party plugins in `plugins/` on the plugin registry (`scripts/publish-plugins.mjs`). A push without a version bump builds and deploys nothing, so a site change only goes live with a changeset for `pouchbase-site` and a plugin change only with one for its `@pouchbase-plugins/<id>` package.
 
 ---
 

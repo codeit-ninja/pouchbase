@@ -1,6 +1,6 @@
 <script lang="ts">
-	import * as Icon from '../icon';
-	import { SPINNER_ICON } from './spinner-icon';
+	import * as Icon from '../icon/index.js';
+	import { SPINNER_ICON } from './spinner-icon.js';
 
 	type Props = {
 		/**

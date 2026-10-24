@@ -21,7 +21,7 @@
 </script>
 
 <script lang="ts">
-	import * as Spinner from '../spinner';
+	import * as Spinner from '../spinner/index.js';
 
 	let {
 		variant = 'primary',

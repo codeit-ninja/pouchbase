@@ -1,9 +1,6 @@
-<script module lang="ts">
-	// Registers every icon used in `src` (see `vite/iconify.ts`), so icons render on the server too.
-	import 'virtual:iconify';
-</script>
-
 <script lang="ts">
+	// The icons are registered by the host: it imports `virtual:iconify` (from the
+	// `@pouchbasejs/ui/vite` plugin) once, so icons render on the server too.
 	import Icon from '@iconify/svelte';
 
 	type Props = {

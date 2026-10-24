@@ -16,13 +16,20 @@ COPY package.json ./
 RUN npm install -g "$(node -p "require('./package.json').packageManager")"
 
 # Install the dependencies of the app and the workspace packages it uses, and build the Node target.
-# Every workspace package.json is copied so the lockfile matches, but the site and the test app
-# aren't installed (`--filter pouchbase...`) and the rest of their files are left out by
-# .dockerignore. The JS SDK is (the dashboard bundles its realtime client), from its sources.
+# Every workspace package.json is copied so the lockfile matches, but the site, the test app and
+# the first-party plugins (`plugins/*`) aren't installed (`--filter pouchbase...`); the rest of the
+# site's and the test app's files are left out by .dockerignore. The JS SDK is (the dashboard
+# bundles its realtime client), from its sources.
 FROM base AS build
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/plugin-sdk/package.json packages/plugin-sdk/
 COPY packages/js-sdk/package.json packages/js-sdk/
+COPY packages/ui/package.json packages/ui/
+COPY plugins/auth-discord/package.json plugins/auth-discord/
+COPY plugins/auth-github/package.json plugins/auth-github/
+COPY plugins/auth-google/package.json plugins/auth-google/
+COPY plugins/auth-microsoft/package.json plugins/auth-microsoft/
+COPY plugins/auth-twitch/package.json plugins/auth-twitch/
 COPY site/package.json site/
 COPY test-app/package.json test-app/
 RUN pnpm install --frozen-lockfile --ignore-scripts --filter "pouchbase..."
@@ -37,6 +44,12 @@ FROM base AS dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/plugin-sdk/package.json packages/plugin-sdk/
 COPY packages/js-sdk/package.json packages/js-sdk/
+COPY packages/ui/package.json packages/ui/
+COPY plugins/auth-discord/package.json plugins/auth-discord/
+COPY plugins/auth-github/package.json plugins/auth-github/
+COPY plugins/auth-google/package.json plugins/auth-google/
+COPY plugins/auth-microsoft/package.json plugins/auth-microsoft/
+COPY plugins/auth-twitch/package.json plugins/auth-twitch/
 COPY site/package.json site/
 COPY test-app/package.json test-app/
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts --filter pouchbase

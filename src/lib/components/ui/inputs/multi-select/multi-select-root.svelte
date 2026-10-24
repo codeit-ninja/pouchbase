@@ -1,5 +1,5 @@
 <script module lang="ts">
-	import type { Item } from '../select/select-root.svelte';
+	import type { Item } from '../select/index.js';
 
 	export type Props = {
 		items: Item[];

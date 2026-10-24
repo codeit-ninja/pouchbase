@@ -1,6 +1,6 @@
 <script module lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { Size, Variant } from '../button/button-root.svelte';
+	import type { Size, Variant } from '../button/index.js';
 
 	export type Props = {
 		/** The text that is copied. */

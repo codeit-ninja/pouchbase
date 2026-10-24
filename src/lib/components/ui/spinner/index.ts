@@ -1,1 +1,1 @@
-export { default as Root } from './spinner-root.svelte';
+export * from '@pouchbasejs/ui/spinner';

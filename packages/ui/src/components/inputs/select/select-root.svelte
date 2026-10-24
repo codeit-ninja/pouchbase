@@ -31,7 +31,7 @@
 
 <script lang="ts">
 	import { Select } from 'bits-ui';
-	import * as Icon from '../../icon';
+	import * as Icon from '../../icon/index.js';
 	import * as ScrollArea from '../../scroll-area/index.js';
 	import * as Thumbnail from '../../thumbnail/index.js';
 

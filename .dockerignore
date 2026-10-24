@@ -2,6 +2,7 @@
 build
 dist
 packages/*/dist
+plugins/*/dist
 .svelte-kit
 .wrangler
 .output
