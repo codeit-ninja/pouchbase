@@ -19,7 +19,7 @@ import {
 	listPublishTokens
 } from '#lib/server/publish-tokens.js';
 import { listOwnPlugins, publishVersion, RegistryFailure } from '#lib/server/registry.js';
-import { currentUser, endSession, startSession } from '#lib/server/session.js';
+import { currentUser, endSession, isVerified, startSession } from '#lib/server/session.js';
 
 /** Only paths on this site, so a sign-in link can't send people elsewhere. */
 function safeRedirect(target: string | undefined) {
@@ -55,10 +55,17 @@ export const getProviders = query(async () => {
 export const signIn = form(signInSchema, async (data) => {
 	const { cookies } = getRequestEvent();
 
+	let verified = false;
+
 	try {
 		const { token } = await pouchbase().auth.signIn(data.email, data._password);
 
-		startSession(cookies, token);
+		// The instance may not require a verified email itself, but the site always does.
+		verified = isVerified(await pouchbase(token).auth.me());
+
+		if (verified) {
+			startSession(cookies, token);
+		}
 	} catch (cause) {
 		if (isPouchbaseError(cause) && cause.status === 401) {
 			invalid('Wrong email or password');
@@ -76,28 +83,26 @@ export const signIn = form(signInSchema, async (data) => {
 		error(502, 'Could not sign in, try again later');
 	}
 
+	// The page then offers to send the verification email again.
+	if (!verified) {
+		return { unverified: true, email: data.email.toLowerCase() };
+	}
+
 	redirect(303, safeRedirect(data.redirectTo));
 });
 
 /**
- * Creates an account. The instance requires a verified email, so there is no session yet: the
- * page asks to follow the link in the verification email and then sign in.
+ * Creates an account. An account is only usable once its email address is verified, so there is
+ * never a session yet: the page says the verification email is on its way and asks to follow the
+ * link in it, then sign in.
  */
 export const signUp = form(signUpSchema, async (data, issue) => {
-	const { cookies } = getRequestEvent();
-
 	try {
-		const result = await pouchbase().auth.signUp({
+		await pouchbase().auth.signUp({
 			name: data.name,
 			email: data.email,
 			password: data._password
 		});
-
-		if (result.verificationRequired) {
-			return { verify: true, email: data.email };
-		}
-
-		startSession(cookies, result.token);
 	} catch (cause) {
 		if (isPouchbaseError(cause) && (cause.status === 400 || cause.status === 409)) {
 			const issues = cause.issues;
@@ -117,7 +122,7 @@ export const signUp = form(signUpSchema, async (data, issue) => {
 		error(502, 'Could not create the account, try again later');
 	}
 
-	redirect(303, '/account');
+	return { verify: true, email: data.email.toLowerCase() };
 });
 
 /** Sends the verification email again; answers the same whether or not the address has an account. */
@@ -140,6 +145,10 @@ export const startOAuthSession = command(z.string().min(1), async (token) => {
 
 	if (!user) {
 		error(401, 'The sign-in expired, try again');
+	}
+
+	if (!isVerified(user)) {
+		error(403, 'Verify your email address first');
 	}
 
 	startSession(cookies, token);

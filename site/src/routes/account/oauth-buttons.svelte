@@ -5,6 +5,7 @@
 	import * as Icon from '#lib/components/ui/icon/index.js';
 	import * as Separator from '#lib/components/ui/separator/index.js';
 	import { toast } from '#lib/components/ui/toast/index.js';
+	import { isHttpError } from '@sveltejs/kit';
 	import { goto } from '$app/navigation';
 	import { POUCHBASE_URL } from '$app/env/public';
 	import { getProviders, startOAuthSession } from './account.remote';
@@ -27,6 +28,13 @@
 			await goto(target, { invalidateAll: true });
 		} catch (error) {
 			const code = isPouchbaseError(error) ? error.code : null;
+
+			// The provider didn't confirm the email address, and the site only lets verified accounts in.
+			if (isHttpError(error, 403)) {
+				toast.error(error.body.message);
+
+				return;
+			}
 
 			if (code !== 'popup_closed') {
 				toast.error(

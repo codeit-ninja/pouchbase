@@ -40,7 +40,15 @@ export function sessionToken(cookies: Cookies) {
 	return token && isTokenValid(token) ? token : null;
 }
 
-/** The signed-in user, checked with the instance once per request; `null` when signed out. */
+/** Whether the user followed the link in the verification email; only they can use their account. */
+export function isVerified(user: User | null) {
+	return user?.verified === true;
+}
+
+/**
+ * The signed-in user, checked with the instance once per request; `null` when signed out or when
+ * the email address isn't verified yet.
+ */
 export async function currentUser(): Promise<User | null> {
 	const { cookies, locals } = getRequestEvent();
 
@@ -49,7 +57,8 @@ export async function currentUser(): Promise<User | null> {
 	}
 
 	const token = sessionToken(cookies);
-	const user = token ? await pouchbase(token).auth.me() : null;
+	const me = token ? await pouchbase(token).auth.me() : null;
+	const user = isVerified(me) ? me : null;
 
 	if (!user && cookies.get(COOKIE)) {
 		endSession(cookies);
