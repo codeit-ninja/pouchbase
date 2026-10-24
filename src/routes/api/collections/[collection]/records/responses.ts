@@ -50,6 +50,22 @@ export function errorResponse(error: ServiceError<number, string>, fallback: str
 			return json({ message: 'The records API doesn’t offer this for this collection' }, 403);
 		case 8014:
 			return json({ message: 'Only admins can do this: the API rule is locked' }, 403);
+		case 8019:
+			return json(
+				{
+					message: `Records of ${String(data.collection)} still link to this record through ${String(data.field)}`
+				},
+				409
+			);
+		case 8021:
+			return json(
+				{
+					message: `This record is the default value of ${String(data.collection)}.${String(data.field)}`
+				},
+				409
+			);
+		case 8020:
+			return json({ message: 'Deleting would cascade to too many linked records' }, 409);
 		case 8015:
 			return json({ message: `Invalid ${String(data.param)}: ${String(data.message)}` }, 400);
 		case 8016: {

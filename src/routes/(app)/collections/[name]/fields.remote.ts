@@ -43,6 +43,7 @@ export const createField = form(createFieldSchema, async (data, issue) => {
 			format: data.format,
 			collectionId: data.relationCollection,
 			multiple: data.multiple,
+			onDelete: data.onDelete,
 			generator: data.idGenerator,
 			defaultSql: data.defaultSql,
 			...(data.type === 'computed' ? computeOptions(data) : {}),
@@ -112,6 +113,7 @@ export const updateField = form(updateFieldSchema, async (data, issue) => {
 		options: {
 			format: data.format,
 			multiple: data.multiple,
+			onDelete: data.onDelete,
 			generator: data.idGenerator,
 			defaultSql: data.defaultSql,
 			...(data.type === 'file' ? fileFieldOptions(data) : {}),

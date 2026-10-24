@@ -152,6 +152,14 @@
 		collection whose view rule is Admins only fails with a 400.
 	</p>
 
+	<p>
+		Each relation field sets what happens when a record it links to is deleted:
+		<Code.Root>set_null</Code.Root> (the default) unlinks it, <Code.Root>cascade</Code.Root> deletes the
+		linking records too, and <Code.Root>restrict</Code.Root> refuses the delete with a 409 while any record
+		links to it. <Code.Root>remove()</Code.Root> throws that 409 as an error. A record that is the default
+		value of a relation field can't be deleted either.
+	</p>
+
 	<h2 id="writing-records">Writing records</h2>
 
 	<CodeBlock.Root title="TypeScript">
@@ -275,9 +283,9 @@
 
 	<p>
 		Collections can also be managed from code, for example in a deploy script, with an API key with
-		the <strong>service</strong> scope. <Code.Root>pb.collections</Code.Root> creates, changes and
-		deletes collections with their fields, indexes and API rules, and exports and imports them as a
-		JSON file without records. The same export and import are in the menu next to
+		the <strong>service</strong> scope. <Code.Root>pb.collections</Code.Root> creates, changes and deletes
+		collections with their fields, indexes and API rules, and exports and imports them as a JSON file
+		without records. The same export and import are in the menu next to
 		<strong>Collections</strong> in the admin.
 	</p>
 
@@ -288,9 +296,9 @@
 	<p>
 		An import creates the collections of the file and changes existing ones to match it; other
 		collections stay unless you pass <Code.Root>removeMissing: true</Code.Root>. Relations to
-		collections outside the file are found by name. Changes that remove fields or data fail with
-		409 unless you pass <Code.Root>force: true</Code.Root>; <Code.Root>dryRun: true</Code.Root> only
-		returns the plan.
+		collections outside the file are found by name. Changes that remove fields or data fail with 409
+		unless you pass <Code.Root>force: true</Code.Root>; <Code.Root>dryRun: true</Code.Root> only returns
+		the plan.
 	</p>
 
 	<Table.Root>

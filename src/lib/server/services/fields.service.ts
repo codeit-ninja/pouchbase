@@ -19,6 +19,8 @@ import {
 	isAutoType,
 	isReservedFieldName,
 	NOW_DEFAULT,
+	RELATION_ON_DELETE,
+	relationOnDelete,
 	validateDefaultValue
 } from '#lib/fields/field-types.js';
 import {
@@ -173,8 +175,9 @@ function columnSql(input: CreateFieldInput, options: { nullableKey?: boolean } =
 	// `@now` and SQL expressions are filled in when a record is created: ADD COLUMN can't have a
 	// non-constant DEFAULT.
 	if (input.defaultValue && input.defaultValue !== NOW_DEFAULT && !input.options.defaultSql) {
+		// A multiple relation or list starts with an array of the one default id or item.
 		parts.push(
-			input.type === 'list' && input.options.multiple
+			isMultiple(input)
 				? `DEFAULT ${quote(JSON.stringify([input.defaultValue]))}`
 				: `DEFAULT ${defaultLiteral(input.type, input.defaultValue)}`
 		);
@@ -585,7 +588,7 @@ export class FieldsService extends Service {
 	/**
 	 * Changes the settings of a field that depend on its type: its default value (also `@now` or a
 	 * SQL expression), list items, accepted file types and size, rich text format, id generator,
-	 * and whether a relation or list allows multiple values. The type, the related collection and
+	 * whether a relation or list allows multiple values, and what deleting a related record does. The type, the related collection and
 	 * a computation (see `updateComputed`) can't change here.
 	 *
 	 * When the column definition changes (its DEFAULT or CHECK), the table is rebuilt and records
@@ -855,7 +858,13 @@ export class FieldsService extends Service {
 			type === 'rich_text'
 				? { format: input.format ?? 'html' }
 				: type === 'relation'
-					? { collectionId: input.collectionId, multiple: input.multiple ?? false }
+					? {
+							collectionId: input.collectionId,
+							multiple: input.multiple ?? false,
+							onDelete: Object.hasOwn(RELATION_ON_DELETE, input.onDelete ?? '')
+								? input.onDelete
+								: relationOnDelete({})
+						}
 					: type === 'computed'
 						? (computedOptions(input) ?? {})
 						: type === 'file'

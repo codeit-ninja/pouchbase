@@ -12,7 +12,9 @@
 		FIELD_TYPES,
 		ID_GENERATORS,
 		idGenerator,
-		isAutoType
+		isAutoType,
+		RELATION_ON_DELETE,
+		relationOnDelete
 	} from '#lib/fields/field-types.js';
 	import { updateFieldsSchema } from '#lib/schemas/fields.js';
 	import AddFieldDialog from './add-field-dialog.svelte';
@@ -122,6 +124,10 @@
 
 		if ((field.type === 'relation' || field.type === 'list') && field.options.multiple) {
 			parts.push('Multiple');
+		}
+
+		if (field.type === 'relation' && relationOnDelete(field.options) !== 'set_null') {
+			parts.push(`On delete: ${RELATION_ON_DELETE[relationOnDelete(field.options)].label}`);
 		}
 
 		if (field.system) {

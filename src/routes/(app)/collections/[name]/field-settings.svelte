@@ -10,12 +10,16 @@
 		MAX_LIST_VALUE_LENGTH,
 		MAX_LIST_VALUES,
 		NOW_DEFAULT,
-		parseListValues
+		parseListValues,
+		RELATION_ON_DELETE,
+		RELATION_ON_DELETE_IDS,
+		relationOnDelete
 	} from '#lib/fields/field-types.js';
 	import { SQL_DEFAULT_TYPES } from '#lib/fields/sql-expression.js';
 	import { FILE_TYPE_PRESET_IDS, FILE_TYPE_PRESETS, splitFileTypes } from '#lib/files/accept.js';
 	import { MAX_FILE_SIZE_MB } from '#lib/schemas/fields.js';
 	import type { GridField } from './grid';
+	import { listRelationOptions } from './records.remote';
 	import { SQL_COMPLETIONS } from './sql-completions';
 
 	type Props = {
@@ -27,6 +31,7 @@
 			defaultSql: AnyRemoteFormField;
 			format: AnyRemoteFormField;
 			multiple: AnyRemoteFormField;
+			onDelete: AnyRemoteFormField;
 			listValues: AnyRemoteFormField;
 			fileTypes: AnyRemoteFormField;
 			customFileTypes: AnyRemoteFormField;
@@ -34,9 +39,11 @@
 		};
 		/** The field being edited: its settings are the starting values. Leave out for a new field. */
 		field?: GridField;
+		/** Relation fields: id of the related collection, whose records can be the default value. */
+		relationCollectionId?: string;
 	};
 
-	let { type, formFields, field }: Props = $props();
+	let { type, formFields, field, relationCollectionId }: Props = $props();
 
 	const MB = 1024 * 1024;
 
@@ -49,6 +56,7 @@
 			generator: field ? idGenerator(options) : undefined,
 			format: options.format ?? 'html',
 			multiple: !!options.multiple,
+			onDelete: relationOnDelete(options),
 			listValues: options.values ?? [],
 			fileTypes: fileTypes.presets,
 			customFileTypes: fileTypes.custom.join(', '),
@@ -84,6 +92,32 @@
 			description: ID_GENERATORS[id].description
 		}))
 	);
+
+	// Not awaited, so the dialog opens right away; until the records are in, only the current
+	// default can be chosen.
+	const relationItems = $derived.by(() => {
+		const collectionId = relationCollectionId ?? field?.options.collectionId;
+		const records = collectionId ? listRelationOptions(collectionId).current : undefined;
+		const items: { value: string; label: string; description?: string }[] = (records ?? []).map(
+			(record) => ({
+				value: record.id,
+				label: record.label,
+				description: record.label === record.id ? undefined : record.id
+			})
+		);
+
+		if (initial.defaultValue && !items.some((item) => item.value === initial.defaultValue)) {
+			items.unshift({ value: initial.defaultValue, label: initial.defaultValue });
+		}
+
+		return items;
+	});
+
+	const onDeleteItems = RELATION_ON_DELETE_IDS.map((id) => ({
+		value: id,
+		label: RELATION_ON_DELETE[id].label,
+		description: RELATION_ON_DELETE[id].description
+	}));
 
 	const fileTypeItems = FILE_TYPE_PRESET_IDS.map((id) => ({
 		value: id,
@@ -186,6 +220,17 @@
 	</Form.Field>
 {/if}
 
+{#if type === 'relation'}
+	<Form.Field field={formFields.onDelete}>
+		<Form.Label>When a linked record is deleted</Form.Label>
+		<Form.Select items={onDeleteItems} defaultValue={initial.onDelete} />
+		<Form.Description>
+			What happens to records of this collection that link to a record when it is deleted.
+		</Form.Description>
+		<Form.Errors />
+	</Form.Field>
+{/if}
+
 {#if type === 'file'}
 	<Form.Field field={formFields.fileTypes}>
 		<Form.Label>File types</Form.Label>
@@ -247,6 +292,14 @@
 				items={[{ value: '', label: 'None' }, ...listItems]}
 				defaultValue={initial.defaultValue}
 			/>
+		{:else if type === 'relation'}
+			{#key relationCollectionId}
+				<Form.Select
+					items={[{ value: '', label: 'None' }, ...relationItems]}
+					defaultValue={initial.defaultValue}
+					placeholder="Select a record…"
+				/>
+			{/key}
 		{:else if type === 'boolean'}
 			<Form.Select items={booleanItems} defaultValue={initial.defaultValue} />
 		{:else}
@@ -265,6 +318,9 @@
 					It must give a date and time, e.g. <span class="font-mono">date('now', '+1 day')</span>;
 					stored in UTC.
 				{/if}
+			{:else if type === 'relation'}
+				New records link to this record when they don't set this field. It can't be deleted while it
+				is the default.
 			{:else}
 				Used when a record doesn't set this field.
 				{#if type === 'date'}

@@ -2,15 +2,21 @@ import type { ErrorOf, ServiceError } from './base.service';
 import type { Collection } from './collections.service';
 import type { Field } from './fields.service';
 import type { SignInMethod } from '#lib/auth/sign-in-methods.js';
-import type { FieldOptions } from '#lib/fields/field-types.js';
+import type { FieldOptions, RelationOnDelete } from '#lib/fields/field-types.js';
 import type { ApiRuleAction } from '#lib/filter/rules.js';
 import type { RealtimeAction } from '#lib/realtime/protocol.js';
 import type { SqlCondition } from '../filter';
 
-import { asc, inArray } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { errAsync, fromPromise, okAsync, ResultAsync } from 'neverthrow';
 
-import { idGenerator, isAutoType, isRelationType, NOW_DEFAULT } from '#lib/fields/field-types.js';
+import {
+	idGenerator,
+	isAutoType,
+	isRelationType,
+	NOW_DEFAULT,
+	relationOnDelete
+} from '#lib/fields/field-types.js';
 import { sqlDefaultSelect } from '#lib/fields/sql-expression.js';
 import { fileFieldRules } from '#lib/files/accept.js';
 import { FilterError } from '#lib/filter/filter.js';
@@ -140,6 +146,51 @@ type ExpandError =
 	| ServiceError<6010, 'GET_COLLECTION_BY_ID_FAILED'>
 	| ServiceError<8018, 'EXPAND_RECORDS_FAILED'>;
 
+/** A record can't be deleted: a record of `collection` links to it through a restricting `field`. */
+type RecordInUseError = ServiceError<8019, 'RECORD_IN_USE'> & {
+	data: { collection: string; field: string };
+};
+
+/** See `RecordInUseError`; thrown while a delete is planned. */
+class RecordInUseFailure extends Error {
+	constructor(
+		readonly collection: string,
+		readonly field: string
+	) {
+		super(`A record of ${collection} links to it through ${field}`);
+	}
+}
+
+/** A record can't be deleted: it is the default value of relation `field` of `collection`. */
+type RecordIsDefaultError = ServiceError<8021, 'RECORD_IS_DEFAULT'> & {
+	data: { collection: string; field: string };
+};
+
+/** See `RecordIsDefaultError`; thrown while a delete is planned. */
+class RecordIsDefaultFailure extends Error {
+	constructor(
+		readonly collection: string,
+		readonly field: string
+	) {
+		super(`The record is the default value of ${collection}.${field}`);
+	}
+}
+
+/** Deleting would cascade to more records than `MAX_CASCADE`; thrown while a delete is planned. */
+class CascadeTooLargeFailure extends Error {}
+
+/** A relation field, the name of the collection it belongs to, and what deleting does to it. */
+type Relation = { collection: string; field: Field; onDelete: RelationOnDelete };
+
+/**
+ * What a delete does (see `deletionPlan()`): the records to delete per collection name (those
+ * requested and those it cascades to), and the relation fields to unlink the deleted ids from.
+ */
+type DeletionPlan = {
+	deletes: Map<string, { context: RecordContext; ids: Set<string> }>;
+	unlinks: { context: RecordContext; field: Field; ids: string[] }[];
+};
+
 type ContextError =
 	| ServiceError<1004, 'APP_DATABASE_MISSING'>
 	| ServiceError<5000, 'GET_SETTING_FAILED'>
@@ -154,6 +205,8 @@ const contexts = new Map<string, RecordContext>();
 
 /** D1 allows at most 100 bound parameters per statement (SQLite itself allows more). */
 const MAX_IDS = 90;
+/** Most records one delete may cascade to through relation fields. */
+const MAX_CASCADE = 1000;
 /** How deep `expand` follows relations: `a.b.c`. */
 const MAX_EXPAND_DEPTH = 3;
 /** Field types whose value makes a good label for a related record, in order of preference. */
@@ -315,6 +368,56 @@ function autoFields(collectionFields: Field[]) {
 /** Record keys as bound parameters; `rowid`s are integers, so other values can't match. */
 function keyParams(key: string, ids: string[]) {
 	return key === 'rowid' ? ids.map(Number).filter(Number.isSafeInteger) : ids;
+}
+
+/** `items` in chunks of at most `size`, e.g. to stay within `MAX_IDS` bound parameters. */
+function chunks<T>(items: T[], size: number) {
+	return Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+		items.slice(index * size, (index + 1) * size)
+	);
+}
+
+/** Whether the relation field links to the collection with this id. */
+function linksTo(relation: Relation, collectionId: string) {
+	return relation.field.options.collectionId === collectionId;
+}
+
+/**
+ * The keys of the records of `source` whose relation `field` links to one of `ids`. Ids are
+ * compared as text: a relation stores them as text, also those of auto-increment ids.
+ */
+function linkedSelect(source: RecordContext, field: Field, ids: string[]) {
+	const table = `"${source.collection.name}"`;
+	const key = `${table}."${autoFields(source.fields).key}"`;
+	const placeholders = ids.map(() => '?').join(', ');
+
+	return {
+		sql: field.options.multiple
+			? `SELECT DISTINCT ${key} FROM ${table}, json_each(${table}."${field.name}") AS "item" WHERE CAST("item"."value" AS TEXT) IN (${placeholders})`
+			: `SELECT ${key} FROM ${table} WHERE "${field.name}" IN (${placeholders})`,
+		params: ids
+	};
+}
+
+/**
+ * Removes `ids` from relation `field` of the records of `source`: a single relation becomes empty,
+ * a multiple one loses them (and becomes empty without any left). Returns the changed rows.
+ */
+function unlinkStatement(source: RecordContext, field: Field, ids: string[]) {
+	const table = `"${source.collection.name}"`;
+	const column = `${table}."${field.name}"`;
+	const placeholders = ids.map(() => '?').join(', ');
+	const key = autoFields(source.fields).key;
+
+	return field.options.multiple
+		? {
+				sql: `UPDATE ${table} SET "${field.name}" = (SELECT CASE WHEN count(*) THEN json_group_array("value") END FROM json_each(${column}) WHERE CAST("value" AS TEXT) NOT IN (${placeholders})) WHERE EXISTS (SELECT 1 FROM json_each(${column}) WHERE CAST("value" AS TEXT) IN (${placeholders})) RETURNING ${returning(key, source.fields)}`,
+				params: [...ids, ...ids]
+			}
+		: {
+				sql: `UPDATE ${table} SET "${field.name}" = NULL WHERE "${field.name}" IN (${placeholders}) RETURNING ${returning(key, source.fields)}`,
+				params: ids
+			};
 }
 
 /** A selected row (the key first, then every field) as a record. */
@@ -1035,6 +1138,11 @@ export class RecordsService extends Service {
 	/**
 	 * Deletes records. With `access` (the records API), only those that match the collection's
 	 * delete rule are deleted.
+	 *
+	 * Relation fields that link to the deleted records follow their `onDelete` option (see
+	 * `RELATION_ON_DELETE`): they are unlinked, the records that link are deleted too (without
+	 * checking their delete rule), or nothing is deleted while a record links to them. A record that
+	 * is the default value of a relation field can't be deleted.
 	 */
 	delete(
 		collectionName: string,
@@ -1048,6 +1156,9 @@ export class RecordsService extends Service {
 		| ServiceError<6006, 'COLLECTION_NOT_FOUND'>
 		| ServiceError<7000, 'LIST_FIELDS_FAILED'>
 		| ServiceError<8006, 'DELETE_RECORDS_FAILED'>
+		| RecordInUseError
+		| ServiceError<8020, 'CASCADE_TOO_LARGE'>
+		| RecordIsDefaultError
 		| GuardError
 	> {
 		const unique = [...new Set(ids)].slice(0, MAX_IDS);
@@ -1063,64 +1174,315 @@ export class RecordsService extends Service {
 				fromPromise(
 					(async () => {
 						const { key } = autoFields(collectionFields);
+						const params = keyParams(key, unique);
 
-						if (!collectionFields.length) {
+						if (!collectionFields.length || !params.length) {
 							return { deleted: 0 };
 						}
 
-						const isFiles = collection.system && collection.name === FILES_COLLECTION;
-						const stored = isFiles
-							? await queryDatabase(
-									databaseId,
-									`SELECT "id", "key", "thumbnails" FROM "files" WHERE "id" IN (${unique.map(() => '?').join(', ')})`,
-									unique
-								)
-							: [];
-						const params = keyParams(key, unique);
-						const rows = params.length
-							? await queryDatabase(
-									databaseId,
-									`DELETE FROM "${collection.name}" WHERE "${key}" IN (${params.map(() => '?').join(', ')}) AND (${condition.sql}) RETURNING ${returning(key, collectionFields)}`,
-									[...params, ...condition.params]
-								)
-							: [];
-						const deleted = rows.map(([id]) => String(id));
+						const placeholders = params.map(() => '?').join(', ');
+						const relations = await this.relations();
 
-						this.announce(collection.name, 'delete', collectionFields, rows);
-						const placeholders = deleted.map(() => '?').join(', ');
-
-						// Deleted users lose their linked provider accounts too.
-						if (deleted.length && collection.system && collection.name === USERS_COLLECTION) {
-							await batchDatabase(databaseId, [
-								{
-									sql: `DELETE FROM "_external_auths" WHERE "user_id" IN (${placeholders})`,
-									params: deleted
-								},
-								{
-									sql: `DELETE FROM "_passwords" WHERE "user_id" IN (${placeholders})`,
-									params: deleted
-								}
-							]);
-						}
-
-						// Deleted files are removed from storage too (the original and every stored
-						// thumbnail); leftovers don't break anything.
-						const keys = stored
-							.filter(([id]) => deleted.includes(String(id)))
-							.flatMap(([, key, thumbnails]) =>
-								storageKeys({ key: String(key), thumbnails: parseThumbnailList(thumbnails) })
+						// Nothing links to this collection: one statement deletes what the rule allows.
+						if (!relations.some((relation) => linksTo(relation, collection.id))) {
+							const stored = await this.storedFiles(context, unique);
+							const rows = await queryDatabase(
+								databaseId,
+								`DELETE FROM "${collection.name}" WHERE "${key}" IN (${placeholders}) AND (${condition.sql}) RETURNING ${returning(key, collectionFields)}`,
+								[...params, ...condition.params]
 							);
 
-						if (keys.length) {
-							await this.services.storage().delete(keys);
+							await this.afterDelete(context, rows, stored);
+
+							return { deleted: rows.length };
 						}
 
-						return { deleted: deleted.length };
+						const allowed = await queryDatabase(
+							databaseId,
+							`SELECT "${key}" FROM "${collection.name}" WHERE "${key}" IN (${placeholders}) AND (${condition.sql})`,
+							[...params, ...condition.params]
+						);
+
+						if (!allowed.length) {
+							return { deleted: 0 };
+						}
+
+						const plan = await this.deletionPlan(
+							context,
+							allowed.map(([id]) => String(id)),
+							relations
+						);
+						const deletes = [...plan.deletes.values()];
+						const stored = await Promise.all(
+							deletes.map((entry) => this.storedFiles(entry.context, [...entry.ids]))
+						);
+						// Unlinking repeats the ids in its statement, so it takes half as many.
+						const unlinks = plan.unlinks.flatMap((unlink) =>
+							chunks(unlink.ids, Math.floor(MAX_IDS / 2)).map((chunk) => ({
+								context: unlink.context,
+								statement: unlinkStatement(unlink.context, unlink.field, chunk)
+							}))
+						);
+						const removals = deletes.flatMap((entry) => {
+							const entryKey = autoFields(entry.context.fields).key;
+
+							return chunks<string | number>(keyParams(entryKey, [...entry.ids]), MAX_IDS).map(
+								(chunk) => ({
+									entry,
+									statement: {
+										sql: `DELETE FROM "${entry.context.collection.name}" WHERE "${entryKey}" IN (${chunk.map(() => '?').join(', ')}) RETURNING ${returning(entryKey, entry.context.fields)}`,
+										params: chunk
+									}
+								})
+							);
+						});
+						const results = await batchDatabase(databaseId, [
+							...unlinks.map(({ statement }) => statement),
+							...removals.map(({ statement }) => statement)
+						]);
+
+						for (const [index, unlink] of unlinks.entries()) {
+							this.announce(
+								unlink.context.collection.name,
+								'update',
+								unlink.context.fields,
+								results[index]
+							);
+						}
+
+						let deleted = 0;
+
+						for (const [index, entry] of deletes.entries()) {
+							const rows = removals.flatMap((removal, removalIndex) =>
+								removal.entry === entry ? results[unlinks.length + removalIndex] : []
+							);
+
+							await this.afterDelete(entry.context, rows, stored[index]);
+
+							// Only the requested records count, not those the delete cascaded to.
+							if (entry.context.collection.id === collection.id) {
+								deleted += rows.filter(([id]) => unique.includes(String(id))).length;
+							}
+						}
+
+						return { deleted };
 					})(),
-					(error) => this.error(8006, 'DELETE_RECORDS_FAILED', error)
+					(error) => {
+						if (error instanceof RecordInUseFailure) {
+							return {
+								...this.error(8019, 'RECORD_IN_USE'),
+								data: { collection: error.collection, field: error.field }
+							};
+						}
+
+						if (error instanceof RecordIsDefaultFailure) {
+							return {
+								...this.error(8021, 'RECORD_IS_DEFAULT'),
+								data: { collection: error.collection, field: error.field }
+							};
+						}
+
+						if (error instanceof CascadeTooLargeFailure) {
+							return this.error(8020, 'CASCADE_TOO_LARGE');
+						}
+
+						return this.error(8006, 'DELETE_RECORDS_FAILED', error);
+					}
 				)
 			);
 		});
+	}
+
+	/** Every relation field of every collection, to follow when records are deleted. */
+	private async relations(): Promise<Relation[]> {
+		const rows = await this.db
+			.select({ field: fields, collection: collections.name })
+			.from(fields)
+			.innerJoin(collections, eq(collections.id, fields.collectionId))
+			.where(eq(fields.type, 'relation'));
+
+		return rows.map(({ field, collection }) => ({
+			collection,
+			field,
+			onDelete: relationOnDelete(field.options)
+		}));
+	}
+
+	/**
+	 * What deleting `ids` of the collection of `root` does through the relation fields that link
+	 * to it, followed from collection to collection for cascades. Throws a `RecordInUseFailure`
+	 * when a record that stays links to a deleted one through a restricting field, and a
+	 * `CascadeTooLargeFailure` beyond `MAX_CASCADE` records.
+	 */
+	private async deletionPlan(
+		root: RecordContext,
+		ids: string[],
+		relations: Relation[]
+	): Promise<DeletionPlan> {
+		const { databaseId } = root;
+		const contexts = new Map([[root.collection.name, root]]);
+		const deletes: DeletionPlan['deletes'] = new Map([
+			[root.collection.name, { context: root, ids: new Set(ids) }]
+		]);
+		const unlinks: DeletionPlan['unlinks'] = [];
+		const restricts: DeletionPlan['unlinks'] = [];
+		const queue = [{ context: root, ids }];
+		let total = ids.length;
+
+		const contextOf = async (name: string) => {
+			const known = contexts.get(name);
+
+			if (known) {
+				return known;
+			}
+
+			const result = await this.context(name);
+
+			if (result.isErr()) {
+				throw new Error(`Could not read collection ${name}: ${result.error.message}`);
+			}
+
+			contexts.set(name, result.value);
+
+			return result.value;
+		};
+
+		const linked = async (source: RecordContext, field: Field, targetIds: string[]) => {
+			const results = await batchDatabase(
+				databaseId,
+				chunks(targetIds, MAX_IDS).map((chunk) => linkedSelect(source, field, chunk))
+			);
+
+			return [...new Set(results.flat().map(([id]) => String(id)))];
+		};
+
+		for (let next = queue.shift(); next; next = queue.shift()) {
+			const target = next;
+
+			for (const relation of relations.filter((candidate) =>
+				linksTo(candidate, target.context.collection.id)
+			)) {
+				const source = await contextOf(relation.collection);
+
+				if (relation.onDelete !== 'cascade') {
+					(relation.onDelete === 'restrict' ? restricts : unlinks).push({
+						context: source,
+						field: relation.field,
+						ids: target.ids
+					});
+					continue;
+				}
+
+				const entry = deletes.get(source.collection.name) ?? {
+					context: source,
+					ids: new Set<string>()
+				};
+				const added = (await linked(source, relation.field, target.ids)).filter(
+					(id) => !entry.ids.has(id)
+				);
+
+				if (!added.length) {
+					continue;
+				}
+
+				total += added.length;
+
+				if (total > MAX_CASCADE) {
+					throw new CascadeTooLargeFailure();
+				}
+
+				added.forEach((id) => entry.ids.add(id));
+				deletes.set(source.collection.name, entry);
+				queue.push({ context: source, ids: added });
+			}
+		}
+
+		// New records would link to a deleted default value.
+		for (const relation of relations) {
+			const defaultValue = relation.field.defaultValue;
+			const target = [...deletes.values()].find((entry) =>
+				linksTo(relation, entry.context.collection.id)
+			);
+
+			if (defaultValue && target?.ids.has(defaultValue)) {
+				throw new RecordIsDefaultFailure(relation.collection, relation.field.name);
+			}
+		}
+
+		// Checked once every cascade is known: records that are deleted too don't hold it back.
+		for (const restrict of restricts) {
+			const doomed = deletes.get(restrict.context.collection.name)?.ids;
+			const holding = (await linked(restrict.context, restrict.field, restrict.ids)).find(
+				(id) => !doomed?.has(id)
+			);
+
+			if (holding) {
+				throw new RecordInUseFailure(restrict.context.collection.name, restrict.field.name);
+			}
+		}
+
+		return { deletes, unlinks };
+	}
+
+	/**
+	 * The stored files of these records when the collection is the built-in `files`, to remove
+	 * from storage once they are deleted (see `afterDelete()`).
+	 */
+	private async storedFiles({ collection, databaseId }: RecordContext, ids: string[]) {
+		if (!ids.length || !collection.system || collection.name !== FILES_COLLECTION) {
+			return [];
+		}
+
+		const results = await batchDatabase(
+			databaseId,
+			chunks(ids, MAX_IDS).map((chunk) => ({
+				sql: `SELECT "id", "key", "thumbnails" FROM "files" WHERE "id" IN (${chunk.map(() => '?').join(', ')})`,
+				params: chunk
+			}))
+		);
+
+		return results.flat();
+	}
+
+	/**
+	 * Sends the realtime events of deleted rows (see `returning()`) and removes what belongs to
+	 * them: the provider accounts and passwords of users, and the stored files of `files`.
+	 */
+	private async afterDelete(context: RecordContext, rows: unknown[][], stored: unknown[][]) {
+		const { collection, fields: collectionFields, databaseId } = context;
+		const deleted = rows.map(([id]) => String(id));
+
+		this.announce(collection.name, 'delete', collectionFields, rows);
+
+		// Deleted users lose their linked provider accounts too.
+		if (deleted.length && collection.system && collection.name === USERS_COLLECTION) {
+			await batchDatabase(
+				databaseId,
+				chunks(deleted, MAX_IDS).flatMap((chunk) => {
+					const placeholders = chunk.map(() => '?').join(', ');
+
+					return [
+						{
+							sql: `DELETE FROM "_external_auths" WHERE "user_id" IN (${placeholders})`,
+							params: chunk
+						},
+						{ sql: `DELETE FROM "_passwords" WHERE "user_id" IN (${placeholders})`, params: chunk }
+					];
+				})
+			);
+		}
+
+		// Deleted files are removed from storage too (the original and every stored thumbnail);
+		// leftovers don't break anything.
+		const keys = stored
+			.filter(([id]) => deleted.includes(String(id)))
+			.flatMap(([, key, thumbnails]) =>
+				storageKeys({ key: String(key), thumbnails: parseThumbnailList(thumbnails) })
+			);
+
+		if (keys.length) {
+			await this.services.storage().delete(keys);
+		}
 	}
 
 	/**

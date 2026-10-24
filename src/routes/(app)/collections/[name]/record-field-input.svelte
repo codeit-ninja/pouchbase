@@ -27,7 +27,12 @@
 	let { field, formField, value, relationTarget }: Props = $props();
 
 	const relationRefs = $derived(Array.isArray(value) ? value : []);
-	const relationIds = $derived(relationRefs.map((ref) => ref.id));
+	// A new record starts with the field's default; a saved record with its own selection.
+	const relationIds = $derived(
+		value === undefined && field.type === 'relation' && field.defaultValue
+			? [field.defaultValue]
+			: relationRefs.map((ref) => ref.id)
+	);
 
 	// Not awaited, so the field shows right away; until the options are in, the current
 	// selection is the only choice.
@@ -182,7 +187,7 @@
 				<span class="font-mono">{field.options.source}</span>, updated when you save
 			{:else}
 				{FIELD_TYPES[field.type].label}{field.type === 'date' ? ' (UTC)' : ''}{field.defaultValue
-					? ` · defaults to ${field.defaultValue === NOW_DEFAULT ? 'the time it is created' : field.defaultValue}`
+					? ` · defaults to ${field.defaultValue === NOW_DEFAULT ? 'the time it is created' : (options.find((option) => option.value === field.defaultValue)?.label ?? field.defaultValue)}`
 					: ''}
 			{/if}
 		</Form.Description>

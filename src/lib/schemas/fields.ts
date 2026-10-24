@@ -11,6 +11,7 @@ import {
 	MAX_SCRIPT_LENGTH,
 	isReservedFieldName,
 	parseListValues,
+	RELATION_ON_DELETE_IDS,
 	RICH_TEXT_FORMATS,
 	validateDefaultValue
 } from '#lib/fields/field-types.js';
@@ -112,6 +113,8 @@ const settingsFields = {
 	format: z.enum(RICH_TEXT_FORMATS).optional(),
 	/** Relation and list fields. */
 	multiple: z.boolean().default(false),
+	/** Relation fields: what deleting a related record does to records that link to it. */
+	onDelete: z.enum(RELATION_ON_DELETE_IDS).optional(),
 	/** List fields: JSON array of the items, in order. */
 	listValues: z.string().optional(),
 	/** File fields: JSON array of `FILE_TYPE_PRESETS` ids. */

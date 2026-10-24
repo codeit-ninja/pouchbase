@@ -31,6 +31,11 @@ export type FieldOptions = {
 	collectionId?: string;
 	/** `relation` and `list`: an array of ids or items instead of one value. */
 	multiple?: boolean;
+	/**
+	 * `relation`: what deleting a related record does to records that link to it: `set_null`
+	 * (the default) unlinks it, `cascade` deletes them too, `restrict` refuses the delete.
+	 */
+	onDelete?: 'set_null' | 'cascade' | 'restrict';
 	/** `list`: the items a record can pick from. */
 	values?: string[];
 	/** `file`: accepted MIME types, wildcards and extensions, such as `["image/*", ".pdf"]`. */

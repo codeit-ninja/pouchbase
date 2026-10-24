@@ -11,6 +11,7 @@ import {
 	COMPUTED_TRANSFORM_IDS,
 	FIELD_TYPE_IDS,
 	ID_GENERATOR_IDS,
+	RELATION_ON_DELETE_IDS,
 	RICH_TEXT_FORMATS
 } from '#lib/fields/field-types.js';
 import { API_RULE_ACTIONS } from '#lib/filter/rules.js';
@@ -31,6 +32,7 @@ export const fieldOptionsSchema = z
 		format: z.enum(RICH_TEXT_FORMATS).optional(),
 		collectionId: id.optional(),
 		multiple: z.boolean().optional(),
+		onDelete: z.enum(RELATION_ON_DELETE_IDS).optional(),
 		values: z.array(z.string()).optional(),
 		accept: z.array(z.string()).optional(),
 		maxSize: z.number().optional(),

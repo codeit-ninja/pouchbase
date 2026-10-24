@@ -90,7 +90,11 @@
 			</Form.Field>
 		{/if}
 
-		<FieldSettings {type} formFields={form.fields} />
+		<FieldSettings
+			{type}
+			formFields={form.fields}
+			relationCollectionId={form.fields.relationCollection.value() as string | undefined}
+		/>
 
 		{#if type === 'computed'}
 			<ComputeOptions {collection} {fields} formFields={form.fields} />

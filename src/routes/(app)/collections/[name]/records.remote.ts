@@ -350,6 +350,26 @@ export const deleteRecords = form(deleteRecordsSchema, async (data) => {
 			error(404, 'Collection not found');
 		}
 
+		if (result.error.code === 8019) {
+			const { collection, field } = result.error.data;
+
+			invalid(
+				`Records of ${collection} still link to ${ids.length === 1 ? 'this record' : 'these records'} through ${field}. Delete or unlink them first.`
+			);
+		}
+
+		if (result.error.code === 8021) {
+			const { collection, field } = result.error.data;
+
+			invalid(
+				`A record is the default value of ${collection}.${field}. Change that default first.`
+			);
+		}
+
+		if (result.error.code === 8020) {
+			invalid('This would delete too many linked records at once. Delete fewer records.');
+		}
+
 		error(500, result.error.message);
 	}
 
