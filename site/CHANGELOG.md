@@ -1,5 +1,20 @@
 # pouchbase-site
 
+## 0.4.0
+
+### Minor Changes
+
+- [`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - The docs have a Plugins page on building plugins and publishing them to the registry.
+
+### Patch Changes
+
+- [`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - The docs point to the mail settings on the Mail page.
+
+- [`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5) Thanks [@codeit-ninja](https://github.com/codeit-ninja)! - Accounts on pouchbase.io are created with a name and email instead of a username, and are only active once the email address is verified.
+- Updated dependencies [[`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5), [`346ed1a`](https://github.com/pouchbase/pouchbase/commit/346ed1afcc5171bfa03b2f31e5b025244bd347e5)]:
+  - @pouchbasejs/plugin-sdk@0.1.1
+  - @pouchbasejs/js-sdk@0.5.0
+
 ## 0.3.0
 
 ### Minor Changes
