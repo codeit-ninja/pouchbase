@@ -126,11 +126,21 @@
 		}
 	}
 
-	async function insertImage() {
+	async function chooseImage() {
+		if (context.pickImage) {
+			return context.pickImage();
+		}
+
 		const result = await dialogs.open(LinkDialog, { kind: 'image' });
 
-		if (editor && result && 'url' in result) {
-			insertBlock(editor, { type: 'image', attrs: { src: result.url, alt: result.label } });
+		return result && 'url' in result ? { src: result.url, alt: result.label } : undefined;
+	}
+
+	async function insertImage() {
+		const image = await chooseImage();
+
+		if (editor && image) {
+			insertBlock(editor, { type: 'image', attrs: image });
 		}
 	}
 

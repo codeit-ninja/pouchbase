@@ -37,10 +37,10 @@
 			and links, and add blocks with <strong>Insert</strong>: buttons, images, sections with a
 			background, two or three columns that stack on phones, spacers and dividers. Select a block to
 			change it in the side panel (a button's link, size, colors and corners, an image's width and
-			alignment, a section's background and padding), or move, duplicate and delete it. With
-			nothing selected, the panel sets the whole email: colors, font, text size, width, padding,
-			corners and logo. Everything is written as tables with inline styles, so the email looks the
-			same in every mail client.
+			alignment, a section's background and padding), or move, duplicate and delete it. With nothing
+			selected, the panel sets the whole email: colors, font, text size, width, padding, corners and
+			logo. Everything is written as tables with inline styles, so the email looks the same in every
+			mail client.
 		</li>
 		<li>
 			<strong>HTML</strong>: the whole document in a code editor, for full control. A visual
@@ -52,9 +52,9 @@
 		The <strong>preview text</strong> is shown next to the subject in the inbox. The
 		<strong>Preview</strong> tab fills in the <strong>sample data</strong>, a JSON object you edit
 		on its own tab, on a desktop or phone width, and <strong>Send test</strong> sends the email as
-		it is in the editor to you. Every
-		email also gets a plain-text version, made from the HTML. Sending needs mail settings:
-		Cloudflare Email Service or an SMTP server, under <strong>Sending</strong> on the same page.
+		it is in the editor to you. Every email also gets a plain-text version, made from the HTML.
+		Sending needs mail settings: Cloudflare Email Service or an SMTP server, under
+		<strong>Sending</strong> on the same page.
 	</p>
 
 	<h2 id="variables">Variables</h2>

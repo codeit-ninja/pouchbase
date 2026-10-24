@@ -22,6 +22,7 @@
 	import { saveMailTemplate } from '../mail.remote';
 	import type { MailTemplate } from '../types';
 	import DeleteTemplateDialog from './delete-template-dialog.svelte';
+	import ImagePickerDialog from './image-picker-dialog.svelte';
 	import ResetTemplateDialog from './reset-template-dialog.svelte';
 	import SendTestDialog from './send-test-dialog.svelte';
 	import SwitchEditorDialog from './switch-editor-dialog.svelte';
@@ -362,6 +363,7 @@
 					bind:value={body}
 					mailStyle={style}
 					variables={variableNames}
+					pickImage={(current) => dialogs.open(ImagePickerDialog, { current })}
 					onReady={(value) => {
 						if (body === saved.body) {
 							savedBody = value;

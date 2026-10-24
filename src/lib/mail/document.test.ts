@@ -142,6 +142,34 @@ describe('renderDocument', () => {
 		expect(html).toContain('height:40px');
 		expect(html).toContain('border-top:2px solid #000000');
 	});
+
+	it('uses the space above and below a block, clamped, and the defaults otherwise', () => {
+		expect(
+			render(
+				{
+					type: 'heading',
+					attrs: { level: 1, marginTop: 32, marginBottom: 0 },
+					content: [text('Hi')]
+				},
+				{ type: 'paragraph', attrs: { marginTop: null, marginBottom: 500 }, content: [text('A')] },
+				{ type: 'horizontalRule', attrs: { marginTop: 8, marginBottom: 'x' } }
+			)
+		).toBe(
+			'<h1 style="margin:32px 0 0;font-size:28px;line-height:1.3;font-weight:700">Hi</h1>' +
+				'<p style="margin:0 0 96px">A</p>' +
+				'<hr style="margin:8px 0 24px;border:0;border-top:1px solid #e4e4e7">'
+		);
+	});
+
+	it('lets a paragraph in a list keep its own spacing', () => {
+		const list = (attrs?: MailNode['attrs']): MailNode => ({
+			type: 'bulletList',
+			content: [{ type: 'listItem', content: [{ type: 'paragraph', attrs, content: [text('A')] }] }]
+		});
+
+		expect(render(list())).toContain('<p style="margin:0">A</p>');
+		expect(render(list({ marginBottom: 8 }))).toContain('<p style="margin:0 0 8px">A</p>');
+	});
 });
 
 describe('columnWidths', () => {

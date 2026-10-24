@@ -2,6 +2,9 @@
 	import type { Snippet } from 'svelte';
 	import type { MailStyle } from '#lib/mail/layout.js';
 
+	/** An image block's source and alternative text. */
+	export type PickedImage = { src: string; alt: string };
+
 	export type Props = {
 		/** The editor's document as JSON, with variable tags such as `{{name}}` in its text. */
 		value?: string;
@@ -11,6 +14,12 @@
 		variables?: string[];
 		placeholder?: string;
 		disabled?: boolean;
+		/**
+		 * Lets the user choose an image (e.g. from files, or by URL), starting from the image
+		 * being edited; resolves with `undefined` when they cancel. Without it, images are added
+		 * by URL.
+		 */
+		pickImage?: (current?: PickedImage) => Promise<PickedImage | undefined>;
 		/**
 		 * Called once the editor has read `value`, with the JSON it writes for it; it can differ
 		 * from `value` (attributes the editor adds), so callers can compare edits against it.
@@ -31,6 +40,8 @@
 	import { EMPTY_DOCUMENT, parseDocument } from '#lib/mail/document.js';
 	import { setEmailEditorContext } from './email-editor-context';
 	import {
+		BlockMargins,
+		DropIntoEmpty,
 		EmailButton,
 		EmailColumn,
 		EmailColumns,
@@ -47,6 +58,7 @@
 		variables = [],
 		placeholder = 'Write your email, or add blocks with Insert…',
 		disabled = false,
+		pickImage,
 		onReady,
 		children
 	}: Props = $props();
@@ -74,6 +86,7 @@
 					heading: { levels: [1, 2, 3] },
 					codeBlock: false,
 					horizontalRule: false,
+					dropcursor: { color: '#3b82f6', width: 3, class: 'email-drop-cursor' },
 					link: {
 						openOnClick: false,
 						// Variables such as `{{url}}` are links too; they are filled in when sending.
@@ -93,6 +106,8 @@
 				EmailColumns,
 				EmailColumn,
 				VariableHighlight,
+				BlockMargins,
+				DropIntoEmpty,
 				Placeholder.configure({ placeholder })
 			],
 			content: value ? parseDocument(value) : EMPTY_DOCUMENT,
@@ -148,6 +163,9 @@
 		},
 		get disabled() {
 			return disabled;
+		},
+		get pickImage() {
+			return pickImage;
 		},
 		mount
 	});

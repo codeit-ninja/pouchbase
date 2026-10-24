@@ -3,6 +3,7 @@
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { FONT_STACKS } from '#lib/mail/layout.js';
 	import { getEmailEditorContext } from './email-editor-context';
+	import DragHandle from './email-editor-drag-handle.svelte';
 
 	let { class: className, ...rest }: HTMLAttributes<HTMLDivElement> = $props();
 
@@ -10,6 +11,8 @@
 	const style = $derived(context.mailStyle);
 
 	const mount: Attachment<HTMLDivElement> = (element) => context.mount(element);
+
+	let card = $state<HTMLDivElement | null>(null);
 </script>
 
 <!--
@@ -25,7 +28,8 @@
 	style:--mail-button-text={style.buttonTextColor}
 >
 	<div
-		class="mx-auto max-w-full shadow-sm"
+		bind:this={card}
+		class="relative mx-auto max-w-full shadow-sm"
 		style:width="{style.width}px"
 		style:background={style.contentColor}
 		style:color={style.textColor}
@@ -55,6 +59,8 @@
 		{/if}
 
 		<div {@attach mount}></div>
+
+		<DragHandle container={card} />
 	</div>
 </div>
 
@@ -176,6 +182,7 @@
 	}
 
 	.email-canvas-frame :global(.email-columns) {
+		position: relative;
 		display: flex;
 	}
 
@@ -183,6 +190,48 @@
 		min-width: 0;
 		outline: 1px dashed #e4e4e7;
 		outline-offset: 2px;
+	}
+
+	/*
+	 * Centered on the gap between two columns, as high as the row; drag it to resize them. It has
+	 * no `left`, so it stays at the start of its column, and the row is what it is placed in.
+	 */
+	.email-canvas-frame :global(.email-column-resizer) {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		margin-left: calc(var(--email-columns-gap, 24px) / -2 - 6px);
+		z-index: 1;
+		width: 12px;
+		cursor: col-resize;
+	}
+
+	.email-canvas-frame :global(.email-column-resizer::after) {
+		content: '';
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 5px;
+		width: 2px;
+		border-radius: 1px;
+		background: #3b82f6;
+		opacity: 0;
+		transition: opacity 0.15s;
+	}
+
+	.email-canvas-frame :global(.email-column-resizer:hover::after) {
+		opacity: 1;
+	}
+
+	/* Where a dragged block lands. */
+	:global(.email-drop-cursor) {
+		border-radius: 2px;
+	}
+
+	/* Keeps the resize cursor and stops text from being selected while dragging. */
+	:global(body.email-column-resizing) {
+		cursor: col-resize;
+		user-select: none;
 	}
 
 	.email-canvas-frame :global(.email-spacer) {

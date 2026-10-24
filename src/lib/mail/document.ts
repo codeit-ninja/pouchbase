@@ -50,6 +50,47 @@ export const BLOCK_DEFAULTS = {
 	divider: { thickness: 1, color: '#e4e4e7' }
 };
 
+/** The largest space above or below a block, in pixels. */
+export const MAX_BLOCK_MARGIN = 96;
+
+/**
+ * The space above and below each kind of block, in pixels, when it has no `marginTop` or
+ * `marginBottom` of its own.
+ */
+export const BLOCK_MARGINS = {
+	paragraph: { top: 0, bottom: 16 },
+	heading: { top: 0, bottom: 12 },
+	bulletList: { top: 0, bottom: 16 },
+	orderedList: { top: 0, bottom: 16 },
+	blockquote: { top: 0, bottom: 16 },
+	horizontalRule: { top: 24, bottom: 24 },
+	image: { top: 0, bottom: 16 },
+	emailButton: { top: 8, bottom: 24 },
+	emailSection: { top: 0, bottom: 16 },
+	emailColumns: { top: 0, bottom: 16 }
+} satisfies Record<string, { top: number; bottom: number }>;
+
+export type SpacedBlock = keyof typeof BLOCK_MARGINS;
+
+/** The space above and below a block: its own, or the default of its kind. */
+export function blockMargins(
+	attrs: Record<string, unknown> | undefined,
+	defaults: { top: number; bottom: number }
+) {
+	return {
+		top: clampNumber(attrs?.marginTop, 0, MAX_BLOCK_MARGIN, defaults.top),
+		bottom: clampNumber(attrs?.marginBottom, 0, MAX_BLOCK_MARGIN, defaults.bottom)
+	};
+}
+
+/** A `margin` for CSS: the block's space above and below, none at the sides. */
+function margin(attrs: Record<string, unknown>, type: SpacedBlock) {
+	const { top, bottom } = blockMargins(attrs, BLOCK_MARGINS[type]);
+	const px = (value: number) => (value ? `${value}px` : '0');
+
+	return top === bottom ? `${px(top)} 0` : `${px(top)} 0 ${px(bottom)}`;
+}
+
 /** Font size of headings relative to the paragraphs. */
 const HEADING_SCALE: Record<number, number> = { 1: 1.85, 2: 1.45, 3: 1.2 };
 
@@ -184,7 +225,11 @@ function renderNode(node: MailNode, context: Context): string {
 
 			const inner = renderChildren(node, context);
 
-			return `<p style="${css({ margin: context.inList ? '0' : '0 0 16px', 'text-align': attrs.textAlign ? alignment(attrs.textAlign) : null })}">${inner || '&nbsp;'}</p>`;
+			// In a list, the list item spaces its paragraphs.
+			const spacing = margin(attrs, 'paragraph');
+			const inList = context.inList && attrs.marginTop == null && attrs.marginBottom == null;
+
+			return `<p style="${css({ margin: inList ? '0' : spacing, 'text-align': attrs.textAlign ? alignment(attrs.textAlign) : null })}">${inner || '&nbsp;'}</p>`;
 		}
 
 		case 'heading': {
@@ -197,14 +242,14 @@ function renderNode(node: MailNode, context: Context): string {
 			const level = clampNumber(attrs.level, 1, 3, 2);
 			const size = Math.round(style.fontSize * HEADING_SCALE[level]);
 
-			return `<h${level} style="${css({ margin: '0 0 12px', 'font-size': `${size}px`, 'line-height': 1.3, 'font-weight': 700, 'text-align': attrs.textAlign ? alignment(attrs.textAlign) : null })}">${renderChildren(node, context)}</h${level}>`;
+			return `<h${level} style="${css({ margin: margin(attrs, 'heading'), 'font-size': `${size}px`, 'line-height': 1.3, 'font-weight': 700, 'text-align': attrs.textAlign ? alignment(attrs.textAlign) : null })}">${renderChildren(node, context)}</h${level}>`;
 		}
 
 		case 'bulletList':
 		case 'orderedList': {
 			const tag = node.type === 'bulletList' ? 'ul' : 'ol';
 
-			return `<${tag} style="margin:0 0 16px;padding:0 0 0 24px">${renderChildren(node, { ...context, inList: true })}</${tag}>`;
+			return `<${tag} style="margin:${margin(attrs, node.type as SpacedBlock)};padding:0 0 0 24px">${renderChildren(node, { ...context, inList: true })}</${tag}>`;
 		}
 
 		case 'listItem': {
@@ -214,13 +259,13 @@ function renderNode(node: MailNode, context: Context): string {
 		}
 
 		case 'blockquote':
-			return `<blockquote style="${css({ margin: '0 0 16px', padding: '4px 0 4px 16px', 'border-left': `3px solid ${style.linkColor}`, color: style.textColor, opacity: 0.85 })}">${renderChildren(node, { ...context, inList: false })}</blockquote>`;
+			return `<blockquote style="${css({ margin: margin(attrs, 'blockquote'), padding: '4px 0 4px 16px', 'border-left': `3px solid ${style.linkColor}`, color: style.textColor, opacity: 0.85 })}">${renderChildren(node, { ...context, inList: false })}</blockquote>`;
 
 		case 'horizontalRule': {
 			const thickness = clampNumber(attrs.thickness, 1, 8, BLOCK_DEFAULTS.divider.thickness);
 			const color = hexColor(attrs.color, BLOCK_DEFAULTS.divider.color);
 
-			return `<hr style="${css({ margin: '24px 0', border: 0, 'border-top': `${thickness}px solid ${color}` })}">`;
+			return `<hr style="${css({ margin: margin(attrs, 'horizontalRule'), border: 0, 'border-top': `${thickness}px solid ${color}` })}">`;
 		}
 
 		case 'image': {
@@ -233,7 +278,7 @@ function renderNode(node: MailNode, context: Context): string {
 				image = `<a href="${attribute(attrs.href)}" target="_blank">${image}</a>`;
 			}
 
-			return `<div style="${css({ margin: '0 0 16px', 'text-align': alignment(attrs.align) })}">${image}</div>`;
+			return `<div style="${css({ margin: margin(attrs, 'image'), 'text-align': alignment(attrs.align) })}">${image}</div>`;
 		}
 
 		case 'emailButton': {
@@ -258,7 +303,7 @@ function renderNode(node: MailNode, context: Context): string {
 				'border-radius': `${radius}px`
 			})}">${label}</a>`;
 
-			return `<div style="${css({ margin: '8px 0 24px', 'text-align': alignment(attrs.textAlign) })}">${link}</div>`;
+			return `<div style="${css({ margin: margin(attrs, 'emailButton'), 'text-align': alignment(attrs.textAlign) })}">${link}</div>`;
 		}
 
 		case 'emailSpacer': {
@@ -273,7 +318,7 @@ function renderNode(node: MailNode, context: Context): string {
 			const borderColor = hexColor(attrs.borderColor, null);
 			const textColor = hexColor(attrs.textColor, null);
 
-			return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;border-collapse:separate"><tr><td style="${css(
+			return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:${margin(attrs, 'emailSection')};border-collapse:separate"><tr><td style="${css(
 				{
 					background: hexColor(attrs.backgroundColor, null),
 					color: textColor,
@@ -311,7 +356,7 @@ function renderNode(node: MailNode, context: Context): string {
 				})
 				.join('');
 
-			return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px"><tr>${cells}</tr></table>`;
+			return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:${margin(attrs, 'emailColumns')}"><tr>${cells}</tr></table>`;
 		}
 
 		default:

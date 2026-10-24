@@ -1,13 +1,19 @@
+import type { FilesService, StoredFile } from '#lib/server/services/files.service.js';
+
 import { error, invalid, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 
 import { command, form, getRequestEvent, query } from '$app/server';
 
+import { fileUrl } from '#lib/files/files.js';
+import { previewThumbnail } from '#lib/files/thumbnails.js';
 import {
 	createMailTemplateSchema,
+	listMailImagesSchema,
 	mailTemplateNameSchema,
 	saveMailTemplateSchema,
-	sendTestMailTemplateSchema
+	sendTestMailTemplateSchema,
+	uploadMailImageSchema
 } from '#lib/schemas/mail-templates.js';
 import { mailSettingsSchema, testMailSchema } from '#lib/schemas/mail.js';
 
@@ -20,6 +26,64 @@ function requireUser() {
 
 	return locals;
 }
+
+/** How many images the image picker shows. */
+const MAIL_IMAGES_LIMIT = 60;
+
+/**
+ * An image in files as the email editor's picker shows it. `path` is relative: queries can't
+ * read the request's URL, so the picker makes it absolute (emails are read elsewhere).
+ */
+function mailImage(file: StoredFile, thumb: string | null) {
+	return {
+		id: file.id,
+		name: file.name,
+		size: file.size,
+		path: fileUrl(file.id),
+		preview: fileUrl(file.id, { thumb })
+	};
+}
+
+/** The size of the picker's thumbnails; `null` when thumbnails are off. Best effort. */
+async function mailImageThumb(files: FilesService) {
+	const settings = await files.thumbnailSettings();
+
+	return settings.isOk() ? previewThumbnail(settings.value, 100) : null;
+}
+
+/** The newest images in files, for the email editor's image picker. */
+export const listMailImages = query(listMailImagesSchema, async ({ search }) => {
+	const files = requireUser().services.files();
+
+	const result = await files.listImages(search, MAIL_IMAGES_LIMIT);
+
+	if (result.isErr()) {
+		error(500, result.error.message);
+	}
+
+	const thumb = await mailImageThumb(files);
+
+	return result.value.map((file) => mailImage(file, thumb));
+});
+
+/** Uploads an image to files from the email editor. */
+export const uploadMailImage = form(uploadMailImageSchema, async (data, issue) => {
+	const files = requireUser().services.files();
+
+	const result = await files.create(data._image);
+
+	if (result.isErr()) {
+		if (result.error.code === 13001 || result.error.code === 13002) {
+			invalid(
+				issue._image(result.error.code === 13001 ? 'This image is too large' : 'This file is empty')
+			);
+		}
+
+		error(500, result.error.message);
+	}
+
+	return mailImage(result.value, await mailImageThumb(files));
+});
 
 /** Every template: the built-in ones first, then the others by name. */
 export const getMailTemplates = query(async () => {

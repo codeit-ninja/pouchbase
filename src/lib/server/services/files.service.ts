@@ -8,7 +8,7 @@ import type { ResultAsync } from 'neverthrow';
 
 import { errAsync, fromPromise, okAsync } from 'neverthrow';
 
-import { FILES_COLLECTION, MAX_FILE_SIZE } from '#lib/files/files.js';
+import { FILES_COLLECTION, INLINE_IMAGE_TYPES, MAX_FILE_SIZE } from '#lib/files/files.js';
 import { parseThumbnailSize } from '#lib/files/thumbnails.js';
 
 import { batchDatabase, queryDatabase, queryObjects } from '../db/query';
@@ -539,6 +539,32 @@ export class FilesService extends Service {
 					return generated;
 				})
 		);
+	}
+
+	/**
+	 * The newest images that can be shown inline (PNG, JPEG, GIF, WebP, AVIF), e.g. to pick one
+	 * for an email. `search` matches part of the name.
+	 */
+	listImages(
+		search: string,
+		limit: number
+	): ResultAsync<StoredFile[], EnsureFilesError | ServiceError<13011, 'LIST_FILES_FAILED'>> {
+		const types = [...INLINE_IMAGE_TYPES];
+		const pattern = `%${search.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+
+		return this.ensureFilesCollection()
+			.andThen(() => this.services.database().requireApp())
+			.andThen((appDatabase) =>
+				fromPromise(
+					queryObjects(
+						appDatabase.id,
+						`SELECT "id", "name", "mime_type", "size", "key", "thumbnails" FROM "files" WHERE "key" IS NOT NULL AND lower("mime_type") IN (${types.map(() => '?').join(', ')}) AND "name" LIKE ? ESCAPE '\\' ORDER BY "created_at" DESC LIMIT ?`,
+						[...types, pattern, limit]
+					),
+					(error) => this.error(13011, 'LIST_FILES_FAILED', error)
+				)
+			)
+			.map((rows) => rows.map(toStoredFile));
 	}
 
 	/**

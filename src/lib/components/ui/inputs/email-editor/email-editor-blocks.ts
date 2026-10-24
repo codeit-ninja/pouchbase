@@ -1,8 +1,9 @@
 import type { Editor, JSONContent } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Fragment } from '@tiptap/pm/model';
+import type { Transaction } from '@tiptap/pm/state';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
-import { BLOCK_DEFAULTS } from '#lib/mail/document.js';
+import { BLOCK_DEFAULTS, columnWidths } from '#lib/mail/document.js';
 
 /** The blocks with settings of their own in the inspector, from the inside out. */
 export const BLOCK_TYPES = [
@@ -12,7 +13,12 @@ export const BLOCK_TYPES = [
 	'horizontalRule',
 	'emailColumn',
 	'emailColumns',
-	'emailSection'
+	'emailSection',
+	'paragraph',
+	'heading',
+	'bulletList',
+	'orderedList',
+	'blockquote'
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
@@ -24,8 +30,25 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
 	horizontalRule: 'Divider',
 	emailColumn: 'Column',
 	emailColumns: 'Columns',
-	emailSection: 'Section'
+	emailSection: 'Section',
+	paragraph: 'Text',
+	heading: 'Heading',
+	bulletList: 'List',
+	orderedList: 'Numbered list',
+	blockquote: 'Quote'
 };
+
+/** Blocks of text; only their spacing is set in the inspector. */
+export const TEXT_BLOCK_TYPES: readonly BlockType[] = [
+	'paragraph',
+	'heading',
+	'bulletList',
+	'orderedList',
+	'blockquote'
+];
+
+/** Blocks that hold paragraphs: the paragraphs in them are spaced by the block. */
+const TEXT_CONTAINERS = new Set(['bulletList', 'orderedList', 'blockquote']);
 
 export type SelectedBlock = { type: BlockType; position: number; node: ProseMirrorNode };
 
@@ -33,26 +56,52 @@ function isBlockType(name: string): name is BlockType {
 	return (BLOCK_TYPES as readonly string[]).includes(name);
 }
 
-/** The blocks around the selection that have settings, the innermost first. */
+/**
+ * The blocks around the selection that have settings, the innermost first. Of the text, only
+ * one block is listed: the outermost list or quote the cursor is in, otherwise its paragraph or
+ * heading.
+ */
 export function selectedBlocks(editor: Editor): SelectedBlock[] {
 	const { selection } = editor.state;
 	const blocks: SelectedBlock[] = [];
 
+	let text: SelectedBlock | null = null;
+
 	if (selection instanceof NodeSelection && isBlockType(selection.node.type.name)) {
-		blocks.push({ type: selection.node.type.name, position: selection.from, node: selection.node });
+		const block = {
+			type: selection.node.type.name,
+			position: selection.from,
+			node: selection.node
+		};
+
+		if (TEXT_BLOCK_TYPES.includes(block.type)) {
+			text = block;
+		} else {
+			blocks.push(block);
+		}
 	}
 
 	const { $from } = selection;
 
 	for (let depth = $from.depth; depth > 0; depth--) {
 		const node = $from.node(depth);
+		const type = node.type.name;
 
-		if (isBlockType(node.type.name)) {
-			blocks.push({ type: node.type.name, position: $from.before(depth), node });
+		if (!isBlockType(type)) {
+			continue;
+		}
+
+		const block = { type, position: $from.before(depth), node };
+
+		if (!TEXT_BLOCK_TYPES.includes(type)) {
+			blocks.push(block);
+		} else if (!text || TEXT_CONTAINERS.has(type)) {
+			// A list or quote further out replaces the paragraph or list found so far.
+			text = block;
 		}
 	}
 
-	return blocks;
+	return text ? [text, ...blocks] : blocks;
 }
 
 /** Changes attributes of the block at `position`. */
@@ -210,6 +259,84 @@ export function setColumnLayout(editor: Editor, position: number, widths: number
 	editor.view.dispatch(
 		state.tr.replaceWith(position + 1, position + node.nodeSize - 1, Fragment.fromArray(columns))
 	);
+}
+
+/** The narrowest column, in percent; `columnWidths` ignores narrower ones. */
+export const MIN_COLUMN_WIDTH = 10;
+
+/** The widths of the columns of a row, in percent; they add up to 100. */
+export function rowWidths(row: ProseMirrorNode) {
+	return columnWidths(row.toJSON().content ?? []);
+}
+
+/** The column that gives or takes the difference when column `index` is resized. */
+function neighborColumn(widths: number[], index: number) {
+	return index < widths.length - 1 ? index + 1 : index - 1;
+}
+
+/** The widest column `index` can get, at the cost of the column next to it. */
+export function maxColumnWidth(widths: number[], index: number) {
+	const neighbor = neighborColumn(widths, index);
+
+	return neighbor < 0 ? 100 : widths[index] + widths[neighbor] - MIN_COLUMN_WIDTH;
+}
+
+/**
+ * The widths after giving column `index` `width` percent. The column next to it (the one before
+ * it, for the last column) gives or takes the difference, so the others keep their width.
+ */
+export function resizedColumnWidths(widths: number[], index: number, width: number) {
+	const neighbor = neighborColumn(widths, index);
+
+	if (neighbor < 0) {
+		return widths;
+	}
+
+	const pair = widths[index] + widths[neighbor];
+	const next = Math.round(Math.min(Math.max(width, MIN_COLUMN_WIDTH), pair - MIN_COLUMN_WIDTH));
+	const result = [...widths];
+
+	result[index] = next;
+	result[neighbor] = pair - next;
+
+	return result;
+}
+
+/** Sets the widths of the columns of the row at `position` in `tr`. */
+export function setColumnWidths(tr: Transaction, position: number, widths: number[]) {
+	const row = tr.doc.nodeAt(position);
+
+	if (!row || row.type.name !== 'emailColumns') {
+		return tr;
+	}
+
+	row.forEach((column, offset, index) => {
+		tr.setNodeMarkup(position + 1 + offset, undefined, { ...column.attrs, width: widths[index] });
+	});
+
+	return tr;
+}
+
+/** The row a column is in, and the column's index in it; `null` when it isn't in a row. */
+export function columnRow(editor: Editor, columnPosition: number) {
+	const $column = editor.state.doc.resolve(columnPosition);
+
+	if ($column.parent.type.name !== 'emailColumns') {
+		return null;
+	}
+
+	return { row: $column.parent, position: $column.before(), index: $column.index() };
+}
+
+/** Gives the column at `columnPosition` `width` percent; see `resizedColumnWidths`. */
+export function resizeColumn(editor: Editor, columnPosition: number, width: number) {
+	const parent = columnRow(editor, columnPosition);
+
+	if (parent) {
+		const widths = resizedColumnWidths(rowWidths(parent.row), parent.index, width);
+
+		editor.view.dispatch(setColumnWidths(editor.state.tr, parent.position, widths));
+	}
 }
 
 const paragraph: JSONContent = { type: 'paragraph' };

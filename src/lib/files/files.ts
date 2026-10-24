@@ -11,7 +11,7 @@ export const MAX_FILE_SIZE = 10 * 1024 * 1024;
  * Image types that are safe to show inline. Everything else (including SVG and HTML, which can
  * run scripts) is served as a download.
  */
-const INLINE_IMAGE_TYPES = new Set([
+export const INLINE_IMAGE_TYPES = new Set([
 	'image/png',
 	'image/jpeg',
 	'image/gif',

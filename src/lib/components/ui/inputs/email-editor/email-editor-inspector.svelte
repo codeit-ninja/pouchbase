@@ -4,17 +4,29 @@
 	import * as Icon from '../../icon/index.js';
 	import * as Inspector from '../../inspector/index.js';
 	import type { ButtonSize } from '#lib/mail/document.js';
-	import { BLOCK_DEFAULTS, columnWidths } from '#lib/mail/document.js';
+	import {
+		BLOCK_DEFAULTS,
+		BLOCK_MARGINS,
+		blockMargins,
+		columnWidths,
+		MAX_BLOCK_MARGIN
+	} from '#lib/mail/document.js';
 	import type { SelectedBlock } from './email-editor-blocks';
 	import {
 		BLOCK_LABELS,
 		canMoveBlock,
+		columnRow,
 		COLUMN_LAYOUTS,
 		deleteBlock,
 		duplicateBlock,
+		maxColumnWidth,
+		MIN_COLUMN_WIDTH,
 		moveBlock,
+		resizeColumn,
+		rowWidths,
 		selectedBlocks,
 		setColumnLayout,
+		TEXT_BLOCK_TYPES,
 		updateBlock
 	} from './email-editor-blocks';
 	import { getEmailEditorContext } from './email-editor-context';
@@ -43,8 +55,16 @@
 		horizontalRule: 'lucide:minus',
 		emailColumn: 'lucide:rectangle-vertical',
 		emailColumns: 'lucide:columns-3',
-		emailSection: 'lucide:square'
+		emailSection: 'lucide:square',
+		paragraph: 'lucide:pilcrow',
+		heading: 'lucide:heading',
+		bulletList: 'lucide:list',
+		orderedList: 'lucide:list-ordered',
+		blockquote: 'lucide:text-quote'
 	};
+
+	// Text blocks only have spacing; the email's settings stay visible below them.
+	const showFallback = $derived(blocks.every((block) => TEXT_BLOCK_TYPES.includes(block.type)));
 
 	const ALIGN_OPTIONS = [
 		{ value: 'left', label: 'Left', icon: 'lucide:align-left' },
@@ -64,6 +84,16 @@
 		}
 	}
 
+	/** Replaces an image block's image with one the user picks; an empty alt text is filled in. */
+	async function chooseImage(block: SelectedBlock) {
+		const current = { src: block.node.attrs.src ?? '', alt: block.node.attrs.alt ?? '' };
+		const image = await context.pickImage?.(current);
+
+		if (image) {
+			update(block, { src: image.src, alt: current.alt || image.alt });
+		}
+	}
+
 	function id(block: SelectedBlock, name: string) {
 		return `email-block-${block.position}-${name}`;
 	}
@@ -72,6 +102,43 @@
 		return widths.join(':');
 	}
 </script>
+
+{#snippet spacing(block: SelectedBlock)}
+	{@const defaults = BLOCK_MARGINS[block.type as keyof typeof BLOCK_MARGINS]}
+	{#if defaults}
+		{@const margins = blockMargins(block.node.attrs, defaults)}
+		{@const custom = block.node.attrs.marginTop != null || block.node.attrs.marginBottom != null}
+		<div class="grid grid-cols-2 gap-3">
+			<Inspector.Range
+				label="Space above"
+				id={id(block, 'margin-top')}
+				value={margins.top}
+				min={0}
+				max={MAX_BLOCK_MARGIN}
+				onValueChange={(marginTop) => update(block, { marginTop })}
+			/>
+			<Inspector.Range
+				label="Space below"
+				id={id(block, 'margin-bottom')}
+				value={margins.bottom}
+				min={0}
+				max={MAX_BLOCK_MARGIN}
+				onValueChange={(marginBottom) => update(block, { marginBottom })}
+			/>
+		</div>
+		{#if custom}
+			<Button.Root
+				type="button"
+				variant="ghost"
+				class="self-start"
+				onclick={() => update(block, { marginTop: null, marginBottom: null })}
+			>
+				<Icon.Root icon="lucide:rotate-ccw" />
+				Default spacing
+			</Button.Root>
+		{/if}
+	{/if}
+{/snippet}
 
 {#snippet blockActions(block: SelectedBlock)}
 	{@const editor = context.editor!}
@@ -190,6 +257,12 @@
 					placeholder={'https://… or {{imageUrl}}'}
 					onValueChange={(src) => update(block, { src })}
 				/>
+				{#if context.pickImage}
+					<Button.Root type="button" variant="secondary" onclick={() => void chooseImage(block)}>
+						<Icon.Root icon="lucide:images" />
+						Choose image…
+					</Button.Root>
+				{/if}
 				<Inspector.Text
 					label="Alternative text"
 					id={id(block, 'alt')}
@@ -298,6 +371,20 @@
 				/>
 				<p class="text-xs text-zinc-500">On phones, the columns are shown below each other.</p>
 			{:else if block.type === 'emailColumn'}
+				{@const row = context.editor && columnRow(context.editor, block.position)}
+				{#if row && row.row.childCount > 1}
+					{@const widths = rowWidths(row.row)}
+					<Inspector.Range
+						label="Width"
+						id={id(block, 'width')}
+						value={widths[row.index]}
+						min={MIN_COLUMN_WIDTH}
+						max={maxColumnWidth(widths, row.index)}
+						unit="%"
+						onValueChange={(width) =>
+							context.editor && resizeColumn(context.editor, block.position, width)}
+					/>
+				{/if}
 				<Inspector.Options
 					label="Vertical alignment"
 					value={attrs.verticalAlign}
@@ -370,8 +457,12 @@
 					onValueChange={(radius) => update(block, { radius })}
 				/>
 			{/if}
+
+			{@render spacing(block)}
 		</Inspector.Section>
-	{:else}
-		{@render fallback?.()}
 	{/each}
+
+	{#if showFallback}
+		{@render fallback?.()}
+	{/if}
 </Inspector.Root>

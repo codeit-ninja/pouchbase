@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { formatFileSize, MAX_FILE_SIZE } from '#lib/files/files.js';
 import { LOGO_ALIGNMENTS, MAIL_FONTS } from '#lib/mail/layout.js';
 import {
 	MAIL_EDITORS,
@@ -105,4 +106,21 @@ export const sendMailSchema = z.object({
 				.max(MAX_RECIPIENTS, `Send to at most ${MAX_RECIPIENTS} recipients at once`)
 		),
 	variables: variables.default({})
+});
+
+/** Image types offered for emails; most email clients show these. */
+export const MAIL_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
+/** Searches the images in files, for the image picker of the email editor. */
+export const listMailImagesSchema = z.object({
+	search: z.string().trim().max(200).default('')
+});
+
+/** An image uploaded to files from the email editor. Leading underscore: never sent back. */
+export const uploadMailImageSchema = z.object({
+	_image: z
+		.file('Choose an image to upload')
+		.min(1, 'This file is empty')
+		.max(MAX_FILE_SIZE, `Images can be at most ${formatFileSize(MAX_FILE_SIZE)}`)
+		.mime(MAIL_IMAGE_TYPES, 'Choose a PNG, JPEG, GIF or WebP image')
 });
